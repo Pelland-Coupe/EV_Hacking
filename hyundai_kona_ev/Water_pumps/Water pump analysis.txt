@@ -1,0 +1,268 @@
+Rear pump
+
+ID 0x4E4 Len 8
+Free running
+Byte 0 - steps from 0x00 to 0x02 at frame 61 (bit 1)
+Byte 1 - Increases with pump speed
+Byte 2 - Always 0x85
+Byte 3 - always 0x00
+Byte 4 - Increases with pump speed
+Byte 5 - counts up to 9 and back down 1 at the start of each rise in speed. Not all valuse seen in count. Stays at 1 for most, not all, of the run.
+Byte 6 - Always 0x00
+Byte 7 - steps from 0x00 to 0x10 at frame 61 (bit 60)
+
+
+First change at frame 22
+
+Locked rotor:
+Byte 0 - always 0
+Byte 1 - Increases with attempt to run
+Byte 2 - Always 0x85
+Byte 3 - always 0x00
+Byte 4 - Increases with attempt to turn
+Byte 5 - counts up to 9 and back down 1 at the start of each start attempt. Not all valuse seen in count. Stays at 1 for most, not all, of the run.
+Byte 6 - Always 0x00
+Byte 7 - Always 0x00
+
+
+
+Analysing 240512-4-pcan-paddle-braking.cvs
+
+0x4DE  has step in Byte 0 at close to the same time. - correlates perfectly on start, stop is slight lag of about 3 messages. steps from 0x00 to 0x0A (bit 1 & 3 set)
+0x59E  has a dip in byte 4 at close to the same time
+0x5D8  has a dip in byte 6 at close to the same time
+
+
+sending the idle frame for 0x4DE keeps pump off. Sending 0x0A in byte 0 causes the pump to cycle but at low speed.
+0x4DE frame
+0x00 0x1E 0x10 0x00 0x12 0xD0 0x06 0x00
+0x0A 0x1E 0x10 0x00 0x12 0xD0 0x06 0x00
+
+**Playing back a limited block of a capture which has rear pump idle
+-While frame 0x4DE is sent pump sits idle and just outputs Byte 2 - 0x85
+-disabling 0x4DE pump starts cycling (Not loaded) and 
+		--bit 1 is set
+		-- between cycles bit 60 is set, but clears part way into next cycle
+
+** tests just sending 0x4DE with empty payload turning on single bits.
+Listems to 0x4DE (100mS signal) 
+Sets Byte(0).1=1 (bit 1) when not hearing 0x4DE.
+0x4DE - Any bit on byte 0 starts pump - may run faster with higher bit numbers. Need to put under load and retest.
+
+		*************** Start of comprehensive tests to match front pump ***
+
+# 4:14 pm 30/11/2024 rear pump - dry with Command Frame 0x4DE all 0x00
+
+Change set command to 0x40 in Byte(0) 
+Pump cycles the same as the front pump and sets bit 1 & 60.
+
+# 4:20 pm 30/11/2024   rear pump - dry with Command Frame 0x4DE all bytes(0) 0x00 Bytes 1 to 7 all 0xFF
+
+Pump remains idle.
+
+# 4:24 pm 30/11/2024   rear pump - dry with two Command Frames 
+0x4DE all bytes(0) 0x00 Bytes 1 to 7 all 0xFF
+0x523 all 0x00
+
+Setting bit 60 in frame 0x523 will start pump purging cycle.
+
+# 4:27 pm 30/11/2024 rear pump - dry with two Command Frames 
+0x4DE all bytes(0) 0x00 Bytes 1 to 7 all 0xFF
+0x523 all 0x00
+
+Stop sending 0x4DE
+
+Pump remains quiet. Appears that either command being receieved will keep pump happy.
+
+# 4:31 pm 30/11/2024  rear pump - dry with two Command Frames 
+0x4DE all bytes(0) 0x00 Bytes 1 to 7 all 0xFF
+0x523 all bits except bit 60 set. Bit 60=0
+
+No reaction to any other bit in 0x523
+
+
+# 4:36 pm 30/11/2024 rear pump with water, Flow valve wide open, No command frame sent.
+
+Pump ramps to max speed & flow
+
+
+# 4:41 pm 30/11/2024 rear pump with water, Flow valve wide open,Command Frame 0x4DE all bytes(0) 0x00 Bytes 1 to 7 all 0xFF
+
+step up bits in byte 1
+
+Pump behaves just like the front one
+
+
+
+**********************************************************************************
+ Front pump
+
+ID 0x570 Len 8
+Free running
+Similar result to rear pump
+** Microcontroller 
+64 pin package
+S912ZVML
+WKM   5N95G (?)
+CTG82048
+
+NXP Semi - S12ZVM family
+
+Listems to 0x523 (10mS signal) - is happy if sent at only 100mS
+Sets Byte(0).1=1 (bit 1) when not hearing 0x523. (2:09 pm 30/11/2024 this turns out to be caused by currect limit on PSU)
+
+0x523 - Any bit on byte 6 starts pump - may run faster with higher bit numbers. Need to put under load and retest.
+0x523 - Byte 7 bit 4 (bit 60) makes pump screem. (is this the "bleed" signal?)
+
+
+***************************************
+Front-pump 2024-11-29 1716.
+
+Flow restricter set so pump won't cycle with no CAN input - runs continuosly 
+start fussing with empty 0x523.
+Turn power on.
+
+Run through turning bits on only one at a time.
+
+When Byte(7).4 is set turned flow restrictor fully open and then back to previous.
+
+Stopped fussing and left pump running.
+played with flow restrictor.
+
+turned power off.
+
+** none of the 3 alarm bits show at any point. even with fussing stop and flow unrestricted so pump cycles.
+
+****************************************************
+10:36 am 30/11/2024 start of next round of testing.
+
+#10:41 am 30/11/2024 savvycan started
+power applied, flow control wide open, no data being sent to pump. Pump cycling. no signs of alarm. 
+!!!Notice current limit on PSU @ 5 amps.
+Byte 0 constant 0x00
+Byte 1 cycles up to 0x9E
+Byte 2 constant 0x85
+byte 3 constant 0x00
+byte 4 cycles up to 0x5E
+Byte 5 cycles up to 0x34
+byte 6 & 7 constant 0x00
+
+
+10:44 am 30/11/2024 turn power off.
+ 
+
+#10:56 am 30/11/2024 savvycan started
+power applied, flow control wide open sending 0x523 with all 0
+
+Pump idle
+
+reduced voltage to 7.9 volts - Bit 1 & Bit 58 set.
+Increased voltage to 9 volts - Bit 1 & Bit 58 clear.
+ Both Bits set and clear together in same frame. 
+
+11:02 am 30/11/2024 turn power off.
+
+
+Test to see what effect changing load has on data.
+
+
+#11:15 am 30/11/2024 savvycan started
+power applied, flow control wide open sending 0x523 with all Byte(6) 0x80
+
+Pump running
+
+current 2.639A
+
+turn flow restrictor fully off
+current 0.721A
+
+flow restrictor 1/2
+current 1.299A
+
+(part of this run) 11:17 am 30/11/2024 slowly turn restrictor from full on to full off
+
+11:18 am 30/11/2024 turn off
+
+
+Byte 1 remains constant
+Byte 4 reduces a bit with reduced flow
+Byte 5 seems to match current exactly.
+
+*******************
+Change to 20Amp fixed PSU.
+
+
+#12:58 pm 30/11/2024  savvycan started
+power applied, flow control wide open. no data being sent to pump
+
+Pump rang, stopped and then ran continously
+When pump stopped, bit 1 & 57 set
+
+
+Running Current about 5.6A
+
+#1:10 pm 30/11/2024 savvycan started
+power applied, flow control wide open. no data being sent to pump
+
+pump cycling and producing bit 1 & 57 alarms
+Alarm appears to be at about 5.8A.
+
+
+# 3:06 pm 30/11/2024 savvycan started
+power applied, flow control wide open. running through bit values on byte 6.
+
+As soon as a bit is set in byte 6 pump speed (byte(1)) goes to 0x2D, min speed
+Once commanded speed reaches 0x2D commanded and set track until current reaches just below alarm threshold. The set speed remains constant while commanded increases.
+
+Current reading Byte(5) exactly tracks current * 10. 
+
+# 3:18 pm 30/11/2024 savvycan started
+power applied, flow control wide open. byte 6 set to 0xFF.
+
+Flow control slowly reduced to see if speed will increase to hold current constant.
+ set speed increased, but not all the way to commanded speed.
+
+Once flow dropped below a certain level, and current, the pump stopped. No alarms showing though.
+
+
+# 3:25 pm 30/11/2024 another run the same 
+ 0xA6 appears to be max set point even at lower currents.
+
+
+# 3:34 pm 30/11/2024 savvycan started
+power applied, flow control wide open. turn bit 60 on & off
+
+Bit 60 off. turn flow off
+ bit 60 back on
+
+
+**** Tests without water
+
+# 3:40 pm 30/11/2024 power applied to dry pump. No command frame.
+
+Both bits 56 & 60 get set 
+
+# 3:46 pm 30/11/2024 power applied to dry pump. With Command frame.
+ 
+Turn on purge bit.
+
+Pump does initial current spike 0x8E (14.2A)
+
+The settles into cycle on/off Byte(0) around 0xC7
+Sets bit 56 at the end of each run cycle
+
+# 3:54 pm 30/11/2024 power applied to dry pump. With Command frame.
+ 
+Apply minimum command
+
+clear command
+
+apply higher command - note accidentally turned on purge during this step.
+
+Result is same for both commands
+Bit 60 gets set during the cycling.
+
+
+Finish with front pump.
+
+
