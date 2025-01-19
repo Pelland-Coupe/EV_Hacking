@@ -1,0 +1,96 @@
+19/01/25
+
+Powered up airbag controller on bench PSU & CAN connections only.
+
+@12V draws ~ 190mA
+
+See messages on both P-CAN (channel 1) and C-CAN (channel 0)
+
+P-CAN message is 0x5A0 only once a second. (Dec 1440)
+This is in the P-CAN DBC file.
+Period 1000mS (1HZ)
+
+C-CAN has 0x130, 0x140, 0x495, 0x500.
+ (Dec 304, 320, 1173, 1280)
+0x130 & 0x140 period 10mS (very fast sigbnal so must be critical)
+0x495 & 0x500 period 100mS ( Reasonably fast, must be important.
+
+Add 8K2 pullup from +12V to pin 10 M06 - Crash output.
+Signal is rectangular wave 16mS on, 4mS on, period 20mS Freq 50Hz.
+
+Matches what ProjectGus found on his module.
+
+Run UDS ## tester present ## scan on C-CAN from 0x700 to 0x7e7
+
+No responce
+
+Extend range 0x700 to 0x7ff
+
+No response
+
+Try P-CAN
+Response from both 0x07D2 and 0x07f1
+Negative for 0x07D2 & Positive for 0x0F1
+
+Run UDS ## Session Control ## 
+Try P-CAN
+positive response from both 0x07D2 and 0x07f1
+
+Run UDS ## Communication Control ## 
+Try P-CAN
+Negative response from both 0x07D2 and 0x07f1
+
+Run UDS ## ECU Reset ## 
+Try P-CAN
+Negative response from both 0x07D2 and 0x07f1
+
+
+Run UDS ## Read DTC ## 
+Try P-CAN
+Negative response from both 0x07D2 and 0x07f1
+
+
+Run UDS ## Security Access ## 
+Try P-CAN
+Negative response from both 0x07D2 and 0x07f1
+
+######################################
+Interperating 0x5A0 using p-can DBC file 17/01/25
+
+Appears to have 12 DTCs active.
+ Flag CF_Acu_FltSat appears to be set for first code and clear for others.
+
+I think these are the codes
+
+37122
+38480
+37673
+37897
+38772
+37684
+37904
+38728
+37752
+37762
+38003
+38007
+
+They don't match any of the airbag codes in the DTM section of the GSW manual.
+
+Will wait until I get proper scan tool to read codes via D-CAN interface.
+
+
+#######################################
+Internals
+2 large ICs by Infineon
+
+Not sure what this one is
+A009B674
+
+Main processor 
+TriCore
+SAK-TC234L
+32F200F AB
+
+
+
