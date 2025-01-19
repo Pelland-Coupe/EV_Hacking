@@ -8,5 +8,5 @@ P-CAN & C-CAN both Respond.
 
 Airbag controller - 19-01-25.txt contains my observations.
 
-The Logs folder carries the CAN logs and the Savvycan scan results. Hopefully names are self explanitry.
+The Logs folder carries the CAN logs and the Savvycan UDS scan results. Hopefully names are self explanitry.
 
