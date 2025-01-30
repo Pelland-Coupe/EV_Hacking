@@ -1,0 +1,82 @@
+Scandoc started and connected to car.
+Select Car HYUNDAI General KONA ELECTRIC (OS EV) 2021 150KW
+
+No packets.
+
+select 150KW - EV Motor Control System (MCU)
+
+
+packet 50 - keepalives
+
+
+show DTCs lots of packets
+
+3040 - back to main screen for MCU 
+
+3110 - select Data Stream
+
+6010 back to main screen for MCU
+
+6080 select actuator tests not many packets
+
+6133 select "RAD fan Forced operation" lots of messages
+
+8780 select on - rejected by ECU & tipped back to main screen 8800
+
+8930 back to main screen
+
+##########################
+8944 back at main screen
+
+
+select VCULDC
+
+keep alives
+
+8967 DTC
+
+9505 back to VCULDC main
+
+9540 data streem 
+
+9995 back to main
+
+10020 Actuator test
+
+	IG3 actuator test - exit 
+10420  ig3 / yes / exit 
+
+10538 rejected by ECU back to actuator test
+
+10580 utilities read vin 106010 end
+
+10650 scu parking test - test failed 10674
+
+10710 back on main screen
+
+###################
+  IGPM 
+
+10710 Select IGPM
+
+10800 on main IGPM screen
+
+10820 identification 10856 back
+
+10900 DTC  - 11212 back
+
+11240 actuator- right turn signal - back 11308
+
+11330 utility - battery discarge test - no coms back   11363
+
+11420 config - edit config - cancel - back 11435
+
+
+finish at 11469
+
+
+
+
+
+
+
