@@ -1,0 +1,135 @@
+3-02-25
+
+###  EBCM  ####
+Brake peddal not physically connected to EBC. 
+Pushing peddal creates all electronic messages but no physical movement of the booster input shaft
+
+
+Connection to C-CAN connection only.
+
+
+Apply power with everything off, but smart key present.
+
+No frames.
+
+Press S/S - orange on
+
+Still no frames
+
+press brake peddle
+
+booster makes pumping noises
+
+still no frames
+
+press S/S - blue on
+
+Frames start
+
+0x153
+0x160
+0x164
+0x220
+0x386
+0x387
+0x394
+0x47F
+0x490
+0x507
+
+
+press s/s again - orange
+
+frames slow
+
+only following still somming
+
+0x153
+0x160
+0x386
+0x387
+0x490
+
+
+0x490 disappears
+
+press brake peddle
+
+some change to frames.
+
+eventually all frames time out.
+
+dash gone blank.
+
+#################################
+
+Disconnect both C-CAN and P-CAN busses and connect to GVRET.
+P-CAN is on channel B - Bus 1
+C-CAN is on channel A - Bus 0
+
+
+power on
+
+no frames
+
+press brake
+
+Noise from booster but no frames
+
+press S/S to orange
+
+still no rames
+
+press brake
+
+lots of noise but no frames
+
+Press S/S to blue
+
+frames start
+
+around 60000 press brake to 70,000
+
+100,000 press S/S
+
+130000 to 135000 press brake again.
+
+
+Frames finally stop.
+
+pump still pulses when brake pushed.
+
+Saved log as "EBC- CnP CAN - 3-02-25"
+
+
+C-CAN frames - Bus 0
+
+0x153 - same both bus	10mS
+0x160			10mS  - not in DBC as at this date
+0x164			10mS - marked as UNK_164 in DBC
+0x220 - same both bus	10mS
+0x386 - same both bus	20mS
+0x387 - same both bus	20mS
+0x394 - same both bus	20mS
+0x47F			20mS   - not in DBC as at this date
+0x490			50mS
+0x507 - same both bus 	100mS
+
+
+##
+D-CAN frames - Bus 1
+
+0x153 - same both bus	10mS
+0x220 -  same both bus	10mS
+0x2A2			10mS
+0x331			10mS
+0x386 -  same both bus	20mS
+0x387 -  same both bus	20mS
+0x394 -  same both bus	20mS
+0x507 -  same both bus	100mS
+
+
+
+
+
+
