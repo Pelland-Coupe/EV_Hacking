@@ -1,0 +1,35 @@
+Investigating the BCM CAN messages on P-CAN and B-CAN.
+
+## P-CAN produces a single message when disconnected from the P-CAN
+0x593
+
+length 6 bytes
+starts all 0x00 for 14 mesages. 
+Appears to run approx 1 per second. Time stamp missing for some reason.
+
+At message 15 changes to 0x01 0x00, 0xff , 0xff 0xff, 0xff
+
+No response to any UDS scans from 0x700 to 0x7FF.
+
+
+### B-CAN
+
+First capture at power on, approx 50 frames/S
+
+10 different IDs.
+
+No response to UDS scans.
+
+0x100
+0x101
+0x102
+0x103
+0x104
+0x105
+0x106
+0x107 - in DBC as <UNK_B107>
+0x109 - in DBC as <VCU_109>. Is this originated from 2 modules?
+0x400
+
+
+Next step is to place on bench and excersize inputs.

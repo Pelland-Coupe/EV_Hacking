@@ -1,0 +1,57 @@
+Bench testing BCM.
+
+CAN 0 is P-CAN and CAN 1 is B-CAN
+
+RLY 3 - IG1 - F2 - ON/Start - M02-A pin 2
+RLY 8 - ACC - F37 - ACC/ON - M02-A pin 12
+RLY 6 - IG2 - F19 - ON - M02-A pin 3
+
+# test 1 - connect power to Memory Power only - M02-A Pin 1
+
+Produces a burst of messages on P-CAN and B-CAN then stops 
+Current drops from 63mA to 3mA
+
+# Test 2 Add ACC power - Normally Supplied by Relay 8 
+Messages restart and then continue 
+Current raises to 64mA
+
+Only the following change value once started.
+0x100
+0x400
+
+Run UDS "Tester Present" scan 0x700 to 0x7FF agains P-CAN - No response
+Run UDS "Tester Present" scan 0x700 to 0x7FF agains B-CAN - No response
+
+# Test 3 remove ACC power 
+
+Messages continue for some time then stop.
+
+# Test 4 Try individual power added to ACC power
+
+Pin 2 ON/ Start power 
+Current 75mA.
+Lots of constant messages 
+Remove power and messages remain but current drops to 63mA
+
+
+ Power down Memory. Wait - repower memory and wait for messages to stop.
+
+Pin 3 - "ON" power
+Current 69mA
+Lots of messages, changes to start but then settled to constant
+Remove power and messages continute then stop.
+
+ 
+# Test 5 try Added power in following order
+Pin 12, Pin 2, Pin 3.
+
+Frame 1 - add Pin 12. disconnect frame  6940
+
+Frame 650  - add pin 2 disconnect frame  6250
+
+Frame 1600   - add pin 3 disconnect frame 5680
+
+
+Saved as "BCM add sequence then remove power.csv"
+
+# Test 6 all power on then trigger inputs

@@ -1,0 +1,238 @@
+# 20-01-25
+
+#####  Body Control Module Testing  ######
+Investigating the BCM CAN messages on P-CAN and B-CAN.
+
+## P-CAN produces a single message when disconnected from the P-CAN
+0x593
+
+length 6 bytes
+starts all 0x00 for 14 mesages. 
+Appears to run approx 1 per second. Time stamp missing for some reason.
+
+At message 15 changes to 0x01 0x00, 0xff , 0xff 0xff, 0xff
+
+No response to any UDS scans from 0x700 to 0x7FF.
+
+
+### B-CAN
+
+First capture at power on, approx 50 frames/S
+
+10 different IDs.
+
+No response to UDS scans.
+
+0x100
+0x101
+0x102
+0x103
+0x104
+0x105
+0x106
+0x107 - in DBC as <UNK_B107>
+0x109 - in DBC as <VCU_109>. Is this originated from 2 modules?
+0x400
+
+
+Next step is to place on bench and excersize inputs.
+
+#Bench captured in seperate file - BCM bench tests 21-01-25.txt#
+
+# 23-01-25 #
+
+Reinstall and start excersizing some inputs based on Warning Indicator list from service manual
+
+
+0x109 appears on both B-CAN and P-CAN but content is very different.
+
+
+
+Indicators do not cause any changes in above frames
+
+Pull RH stalk 0x102 byte 2 changes from 0xA0 to 0xAC - bits 2&3 on
+
+Pull LH stalk 0x107 byte 7 changes from 0xC0 to 0xC2 - Bit 1 ON - Moving stalk up/down changes  byte 6 & 7 but Pull only turns bit 1 on.
+
+Push RH & LH stalk - no change with lights off
+
+LH stalk full up - 0x107 byte 6 & 7 = 0x00. - Wiper speed
+down 1 click - byte 6 0x20 byte 7 0x40
+down 2 clicks - byte 6 0x08 byte 7 0x80
+down 3 clicks - byte 6 0x10 byte 7 0xC0
+
+RH Stalk "Thumb switch" front & rear - 0x100 byte 5 changes from 0x02 to 0x03 - bit 0 ON. Rear Fog lamp on
+
+LH Stalk "Thumb switch" front full down -0x101 byte 7 0x00  - Int wiper time
+LH Stalk "Thumb switch" front one up -0x101 byte 7 0x10
+LH Stalk "Thumb switch" front two up -0x101 byte 7 0x20 
+LH Stalk "Thumb switch" front three up -0x101 byte 7 0x30
+LH Stalk "Thumb switch" front four up -0x101 byte 7 0x40
+
+
+RH Stalk end switch vertical - Lights OFF
+
+
+RH Stalk end switch 1 click - 	0x102 	byte 1 from 0x00 to 0x40
+	Lights Auto			byte 2 from 0xA0 to 0xA6
+				0x107	byte 6 from 0x00 to 0xC0
+
+RH Stalk end switch 2 click - 	0x102 	byte 1  0x40 (no change)
+	Park Lights			byte 2  0xA2
+				0x107	byte 6  0x40
+
+RH Stalk end switch 3 click - 	0x102 	byte 1  0x40 (no change)
+	Head lights			byte 2  0xA6 low beam or 0xAE high beam. (bit 3 high beam)
+				0x107	byte 6  0x80
+
+
+LH Stalk end switch vertical -  Rear wipers
+LH Stalk end switch 1 click -	0x107	byte 7 from 0x00 to 0x10
+LH Stalk end switch 2 click -	0x107	byte 7 0x20
+
+
+Steering wheel audio controls - no affect
+
+RH steering wheel controls - no affect
+
+########### Tryed things with no affect on frames
+RH dash buttons
+Air con controlls
+console buttons. - drive mode does change on dash.
+
+
+#####
+Changing from blue to orange on stop/start does change frames.
+
+Capture all B-CAN messages starting with orange S/S then press to blue(900), wait for alarm to stop then press again back to orange(4300). "B-CAN standby-on-standby 23-01-25 - 1136.csv"
+
+###
+Separate IGPM from B-CAN and capture log "B-CAN -IGPM messages 23-01-25 - 1157.csv"
+No messages in Sdby - start when press start/stop RUN (blue light on)
+
+0x168
+0x169
+0x16A
+0c188
+0x189
+0x18A
+0x18B
+0x18C
+0x18D
+0x18E
+0x18F
+0x1F7
+0x1FA
+0x416
+0x588
+0x589
+
+
+################
+Separate Smart key module and capture "B-CAN -SKM messages 23-01-25 - 1203.csv"
+Start capture Sdby - then press start/stop RUN (blue light on) - then back to standby
+
+0x110
+0x111
+0x112
+0x113
+0x401
+0x510
+
+0x010 appears only while in "RUN"
+
+
+
+#########################
+Monitor full B-CAN 
+
+0x589 byte 4 changing. All others stable
+
+Turn on hazzard lights
+0x168  changes byte 3 changes 0x00 to 0x20 Bit 5 set.
+	Byte 6 flikers 0x00 to 0x80 - bit 7 pulse with the click from the dash
+
+Left blinker
+0x168 Byte  6 flikers 0x00 to 0xA0 bit 5 & bit 7 pulse with the click from the dash
+0x16A byte 0 changes 0x00 to 0x08  bit 3 set
+
+
+Rightblinker
+0x168 Byte  6 flikers 0x00 to 0x20 bit 5  pulse with the click from the dash
+0x16A byte 0 changes 0x00 to 0x0  bit 2 set
+
+
+Push brake peddle
+0x112 byte 0 0xC0 to 0xD0 bit 4 set
+0x169 Byte 1 0x00 0x80  bit7 set
+
+
+Shift between Park & N
+
+0x112  byte 3 park 0x1F N = 0x1E  Bit 0 set for park
+0x189  Byte 7 Park 0x00 N = 0x18  Bit 3 & 4 set for Neutral.
+
+Drive Mode
+0x18D  	Byte 3, Sport = 0x5A , Normal = 0x5B,  Eco = 0x5C
+	Byte 4, Sport = 0x00,  Normal = 0x00 , Eco = 0x40
+
+
+Run again and had slightly different results
+0x18D  	Byte 3, Sport = 0x59 , Normal = 0x5B,  Eco = 0x5C
+	Byte 4, Sport = 0xC0,  Normal = 0x00 , Eco = 0x40
+
+What Changed?  Are these flags setting so behaviours?
+
+
+Sit in sport mode and change settings on A/V display
+
+Climate currently "Normal" change to "ECO" - no affect on 0x18D 
+Recuperation currently 1 - change to 2 - no affect on 0x18D 
+Also checked all B_CAN messages, no impact
+
+Run again and had slightly different results
+0x18D  	Byte 3, Sport = 0x59 , Normal = 0x5A,  Eco = 0x5C
+	Byte 4, Sport = 0x80,  Normal = 0xC0 , Eco = 0x00
+
+Factory reset of driving mode has no impact on any B-CAN message
+
+
+Dash light brightness 
+0x188 byte 1 lowest 0x08, step up 0x10, 0x18, 0x20, 0x28, 0x30, 0x38, 0x40, 0x48, 0x50, 0x58, 0x60, 0x68, 0x70, 0x78, 0x80, 0x88, 0x90, 0x98, 0xA0, Bit 3 to 7 count up from 0x00 to ? 
+
+
+### Media controlls
+
+Radio/Media off 
+0x18B byte 0 0x14 press on 0x22
+
+Seek, byte 1 & 2 cycle
+
+Band FM Byte 0 0x22, AM 0x28  (Bit 1 & Bit 3 set)
+	Byte 1 0x0C, AM 0x21 - this reflects the different station selected
+
+
+Volume has no effact.
+
+### Climate controls
+
+0x18D "OFF" 05, BB, 97, 5D, 80, 00, 00, 0A
+
+Auto     05, BB, 97, 5C, 00, 00, 00, 0A  Byte 3 97 to 5C, Byte 4 80 to 00
+
+A/C   Byte 3 5D to 5C - Bit 0 off
+
+Heat Byte 3 5D to 5C - Bit 0 off
+
+Recirculate - nothing
+
+Front Byte 3 5D to 5C - Bit 0 off
+
+Driver only - nothing
+
+
+A/C fan min Byte 3 5C Byte 4 C0. Step fan up 5C/40, 5B/C0, 5B/40, 5A/C0, 5A/00, 59/80, 58,80, 
+Byte 3 bits 0-3 & Byte 4 6&7  
+
+
+
