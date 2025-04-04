@@ -13,3 +13,6 @@ The ScanDoc folder contains D-CAN scans when running various scans from the Scan
 
 B-CAN contains logs etc associated with the B-CAN. It started with investigation the BCM then includes identifying messages from the SKM and IGPM on the B-CAN
 Note I have identified that frame 0x109 originates from the BCM on B-CAN and is very different to the 0x109 that appears on the P-CAN.
+
+
+CAN Signals contain a versioned spreadsheet listing IDs, originating module, and bus they are seen on.
