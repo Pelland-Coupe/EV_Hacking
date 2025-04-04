@@ -1,0 +1,28 @@
+Further investigation into the M-CAN bus has identified it as a 100,000b/S low speed CAN
+This used a differnt set of voltage levels and is not compatible with High speed CAN interface modules.
+
+I used a discrete transistor interface between CAN-H and the GVRET digital input pin, bypassing the CAN interface modules.
+
+When connected across the full M-CAN Savvycan will record frames quite happerly. 
+But when the IGMP is isolated from the buss savvycan/GVRET will not receieve any frames.
+
+Using a logic analyser on the digital input pin I can succesfully decode frames in both situation.
+
+Using an osciloscope shows no decernable difference in the waveforms either on the bus or at the digital input pin.
+
+The only difference I can see is that all frames when disconnected are NAK. May be this is why they wont display?
+
+I will try and obtain a low-speed can interface module that will read and drive both CAN-L and CAN-H correctly.
+
+
+
+
+"4-04-2025-M-CAN-IGPM isolated.txt" is the CAN decoded output of the logic analyser with the IGPM disconnected from all Buses.
+
+"M-CAN GVRET works.logicdata" and "M-CAN GVRET-no go.logicdata" are the logic analyser captures on full bus and IGPM only respectivly.
+
+
+"First-reading-of-M-CAN-bus.csv" is a savvycan capture of the full M-CAN bus with the stop/start power showing blue.
+
+
+
