@@ -1,0 +1,57 @@
+VERSION ""
+
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIG_TYPE_REF_
+    VAL_TABLE_
+    SIG_GROUP_
+    SIG_VALTYPE_
+    SIGTYPE_VALTYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BS_: 
+ 
+BO_ 356 UNK_164: 8 Vector__XXX
+
+BO_ 881 IEB_MAYBE_C371: 8 Vector__XXX
+   SG_ BrakeUnknown : 7|8@0+ (1,0) [0|255] "" Vector__XXX
+
+BO_ 1162 BSD_Pos_48A: 8 BSD?
+   SG_ BSD_pos_48A_Counter : 21|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ BSD_Pos_48A_Checksum : 63|2@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ BSD_Pos_48A_Signal1 : 61|6@0+ (1,0) [0|1] "" Vector__XXX
+
+CM_ SG_ 881 BrakeUnknown "Same byte as PCAN 0x2a2, 0x331";
+CM_ BO_ 1162 "Possible blind spot system. IEB sets DTC-C181887  'CAN timeout LCA/BSD/BCW' if not present";
+CM_ SG_ 1162 BSD_Pos_48A_Counter "4_bit Counter";
+CM_ SG_ 1162 BSD_Pos_48A_Checksum "Possible checksum - not calculated yet";
+CM_ SG_ 1162 BSD_Pos_48A_Signal1 "Is_this_one 6 bit signal or two 3 bit signals";
+BA_DEF_ BO_ "GenMsgBackgroundColor" STRING ;
+BA_DEF_ BO_ "GenMsgForegroundColor" STRING ;
+BA_DEF_ BO_ "labelfilters" INT 0 0;
+BA_DEF_DEF_ "GenMsgBackgroundColor" "#ffffff";
+BA_DEF_DEF_ "GenMsgForegroundColor" "#000000";
+BA_DEF_DEF_ "labelfilters" 1;
+BA_ "GenMsgForegroundColor" BO_ 1162 "#000000";
