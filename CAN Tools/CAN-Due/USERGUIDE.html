@@ -1,0 +1,1060 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>GVRET Firmware User Guide</title><style>
+body{font-family:sans-serif;max-width:60em;margin:2em auto;padding:0 1em;line-height:1.5}
+table{border-collapse:collapse} th,td{border:1px solid #999;padding:4px 8px}
+th{background:#eee} code{background:#f4f4f4;padding:1px 4px;border-radius:3px}
+pre code{display:block;padding:8px} h1,h2{border-bottom:1px solid #ccc}
+</style></head><body><h1 id="gvret-firmware-user-guide">GVRET Firmware User Guide</h1>
+<p><strong>Generalized Electric Vehicle Reverse Engineering Tool</strong>
+Firmware version: <code>GVRET alpha 2017-11-09</code> — build <strong>343</strong>, EEPROM version <code>0x17</code>
+Authors: Collin Kidder, Michael Neuweiler, Charles Galpin (MIT license)</p>
+<p>This guide documents how to <em>use</em> the firmware as it exists in this source tree,
+including every function that can be triggered by a signal on a physical pin and
+every signal the firmware can generate on a pin. It was produced by analysis of
+the source code; file/line references are given where they matter.</p>
+<hr />
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#1-overview">Overview</a></li>
+<li><a href="#2-supported-hardware">Supported Hardware</a></li>
+<li><a href="#3-quick-start">Quick Start</a></li>
+<li><a href="#4-pin-reference">Pin Reference</a></li>
+<li>4.1 <a href="#41-inputs--functions-triggered-by-signals-on-pins">Inputs — functions triggered by signals on pins</a></li>
+<li>4.2 <a href="#42-outputs--signals-the-firmware-creates-on-pins">Outputs — signals the firmware creates on pins</a></li>
+<li><a href="#5-text-console-reference">Text Console Reference</a></li>
+<li><a href="#6-lawicel--slcan-mode">Lawicel / SLCAN Mode</a></li>
+<li><a href="#7-binary-gvret-protocol">Binary GVRET Protocol</a></li>
+<li><a href="#8-sd-card-logging">SD Card Logging</a></li>
+<li><a href="#9-eeprom-settings--factory-reset">EEPROM Settings &amp; Factory Reset</a></li>
+<li><a href="#10-known-quirks--bugs-in-this-build">Known Quirks &amp; Bugs in This Build</a></li>
+<li><a href="#11-verifying-the-firmware-on-your-hardware">Verifying the Firmware on Your Hardware</a></li>
+</ol>
+<hr />
+<h2 id="1-overview">1. Overview</h2>
+<p>GVRET turns an Arduino-Due-class board into an autonomous CAN bus
+reverse-engineering tool. After configuration it runs stand-alone: plug it into
+a vehicle bus and it logs traffic to an SD card with no host connected.</p>
+<p>Main capabilities:</p>
+<ul>
+<li><strong>Two high-speed CAN channels</strong> (CAN0, CAN1) via the Due's built-in CAN
+  controllers, plus a <strong>single-wire CAN (SWCAN)</strong> option:</li>
+<li>On CANDue ≤ 2.1 boards, CAN1's transceiver can be switched into single-wire
+    mode (bus 1 doubles as SWCAN).</li>
+<li>On CANDue 2.2+ boards a dedicated MCP2515-based SWCAN channel exists
+    (reported as bus 2).</li>
+<li><strong>Automatic frame pass-through</strong> between CAN0 and CAN1 (hardware gateway),
+  gated by jumper pins (see §4.1).</li>
+<li><strong>SD card logging</strong> in three formats: Binary, GVRET CSV, CRTD (§8).</li>
+<li><strong>USB serial interface</strong> with three personalities:</li>
+<li>human-readable text console + frame dump (default),</li>
+<li>Lawicel/SLCAN-compatible command set (§6),</li>
+<li>the binary GVRET protocol spoken by SavvyCAN (§7).</li>
+<li><strong>Digital I/O features</strong>: 4 digital inputs, 4 analog inputs, 8 digital
+  outputs, and a configurable "digital toggle" bridge between one Arduino pin
+  and one CAN identifier in either direction (§4).</li>
+<li>All settings persist in EEPROM; factory reset via console command.</li>
+</ul>
+<hr />
+<h2 id="2-supported-hardware">2. Supported Hardware</h2>
+<p>The board type is stored in EEPROM as <code>SYSTYPE</code> and selects pin maps, LED
+assignments and bus count (<code>loadSettings()</code> in <code>GVRET-gvret.ino</code>).</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">SYSTYPE</th>
+<th>Board</th>
+<th style="text-align: right;">CAN buses</th>
+<th style="text-align: center;">SD card</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">0</td>
+<td>CANDue (original)</td>
+<td style="text-align: right;">2 (+SW via CAN1)</td>
+<td style="text-align: center;">yes</td>
+<td>Factory default</td>
+</tr>
+<tr>
+<td style="text-align: right;">1</td>
+<td>GEVCU</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: center;">no</td>
+<td>Transceivers have no enable pins</td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td>CANDue 1.3 – 2.1</td>
+<td style="text-align: right;">2 (+SW via CAN1)</td>
+<td style="text-align: center;">yes</td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align: right;">3</td>
+<td>CANDue 2.2</td>
+<td style="text-align: right;">3 (dedicated SWCAN)</td>
+<td style="text-align: center;">yes</td>
+<td>MCP2515 on SPI for SWCAN</td>
+</tr>
+</tbody>
+</table>
+<h3 id="per-board-pin-assignments-configh">Per-board pin assignments (<code>config.h</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th style="text-align: right;">CANDue (0)</th>
+<th style="text-align: right;">GEVCU (1)</th>
+<th style="text-align: right;">CANDue 1.3–2.1 (2)</th>
+<th style="text-align: right;">CANDue 2.2 (3)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>EEPROM write-protect</td>
+<td style="text-align: right;">18</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">18</td>
+<td style="text-align: right;">18</td>
+</tr>
+<tr>
+<td>CAN0 transceiver enable</td>
+<td style="text-align: right;">50</td>
+<td style="text-align: right;">n/a</td>
+<td style="text-align: right;">50</td>
+<td style="text-align: right;">50</td>
+</tr>
+<tr>
+<td>CAN1 transceiver enable</td>
+<td style="text-align: right;">48</td>
+<td style="text-align: right;">n/a</td>
+<td style="text-align: right;">48</td>
+<td style="text-align: right;">48</td>
+</tr>
+<tr>
+<td>SWCAN mode pin 0</td>
+<td style="text-align: right;">46</td>
+<td style="text-align: right;">n/a</td>
+<td style="text-align: right;">46</td>
+<td style="text-align: right;">46</td>
+</tr>
+<tr>
+<td>SWCAN mode pin 1</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">n/a</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">44</td>
+</tr>
+<tr>
+<td>SD card chip-select</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">n/a</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td>LED CAN TX</td>
+<td style="text-align: right;">73</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">13</td>
+</tr>
+<tr>
+<td>LED CAN RX</td>
+<td style="text-align: right;">72</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">13</td>
+</tr>
+<tr>
+<td>LED logging</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">none</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">13</td>
+</tr>
+</tbody>
+</table>
+<p>CANDue 2.2 additional MCP2515 (SWCAN) pins: RESET = 32, CS = 34, INT = 38
+(interrupt-driven, falling edge), RXB0 = 41, RXB1 = 40.</p>
+<h3 id="required-libraries-to-compile-from-readmemd">Required libraries to compile (from README.md)</h3>
+<p><code>due_can</code>, <code>can_common</code>, <code>MCP2515</code>, <code>due_wire</code>, <code>SdFat</code> (beta),
+<code>DueFlashStorage</code>, <code>Wire_EEPROM</code> — installed in the Arduino libraries folder
+with exactly these names (no <code>-master</code> suffixes). Build in Arduino IDE 1.5.4+.</p>
+<hr />
+<h2 id="3-quick-start">3. Quick Start</h2>
+<ol>
+<li>Set <code>SYSTYPE</code> correctly once (text console: <code>SYSTYPE=2</code>, then power-cycle).</li>
+<li>Wire CAN0-H/L (and CAN1-H/L if used) to the vehicle bus. The bus must be
+   terminated at both ends (~120 Ω each end) — the device does not add
+   termination.</li>
+<li>Connect the USB <strong>native port</strong> to a PC. <code>SerialUSB</code> is the main interface;
+   the programming port (<code>Serial</code>, 115200 baud) only carries early debug text.</li>
+<li>Open a serial terminal (or SavvyCAN). Send <code>h</code> + line ending to see the menu
+   and build number. Line endings (LF, CR, CRLF) are required for all
+   text commands.</li>
+<li>Typical first-time setup:</li>
+</ol>
+<p><code>CAN0SPEED=500000        set bus speed
+   CAN0EN=1                enable CAN0
+   FILETYPE=2              log as GVRET CSV
+   FILEBASE=CANBUS         base file name
+   s                       start logging to SD
+   MARK=Key on             annotate the log
+   S                       stop logging</code></p>
+<ol>
+<li>For SavvyCAN: simply connect over serial USB — SavvyCAN sends <code>0xE7</code>,
+   which switches the device into binary protocol mode automatically (§7).</li>
+</ol>
+<hr />
+<h2 id="4-pin-reference">4. Pin Reference</h2>
+<h3 id="41-inputs-functions-triggered-by-signals-on-pins">4.1 Inputs — functions triggered by signals on pins</h3>
+<h4 id="pass-through-gate-pins-11-and-12-all-boards">Pass-through gate pins 11 and 12 (all boards)</h4>
+<p><code>ENABLE_PASS_0TO1_PIN = 11</code>, <code>ENABLE_PASS_1TO0_PIN = 12</code>
+(<code>config.h</code>, used in <code>loop()</code> at <code>GVRET-gvret.ino:628</code> and <code>:637</code>).</p>
+<p>Both are inputs with internal pull-ups enabled at boot, so <strong>floating =
+function active</strong>.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">Pin</th>
+<th>Signal condition</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">11</td>
+<td>HIGH (default, pull-up)</td>
+<td>Every frame received on <strong>CAN0 is re-transmitted on CAN1</strong></td>
+</tr>
+<tr>
+<td style="text-align: right;">11</td>
+<td>LOW (shorted to GND)</td>
+<td>CAN0 → CAN1 forwarding disabled</td>
+</tr>
+<tr>
+<td style="text-align: right;">12</td>
+<td>HIGH (default, pull-up)</td>
+<td>Every frame received on <strong>CAN1 is re-transmitted on CAN0</strong></td>
+</tr>
+<tr>
+<td style="text-align: right;">12</td>
+<td>LOW (shorted to GND)</td>
+<td>CAN1 → CAN0 forwarding disabled</td>
+</tr>
+</tbody>
+</table>
+<p>This lets you use the board as a wire-in gateway/recorder and cut the
+forwarding path with a jumper without touching software. There is <strong>no
+debouncing</strong> on these pins (they are intended as static jumpers).</p>
+<blockquote>
+<p>Warning: forwarded frames are re-transmitted as-is. Forwarding between two
+real buses merges their traffic; make sure that is what you want.</p>
+</blockquote>
+<h4 id="digital-toggle-system-pin-to-can-direction-mode-0">Digital toggle system — pin-to-CAN direction (mode 0)</h4>
+<p>Configured by the <code>DIGTOG*</code> console commands (§5). When
+<code>DIGTOGEN=1</code> and <code>DIGTOGMODE=0</code>, the pin number given by <code>DIGTOGPIN</code> becomes a
+digital input watched by the main loop (<code>GVRET-gvret.ino:654-672</code>):</p>
+<ul>
+<li>The pin is polled every loop iteration; a transition is only accepted after
+  <strong>4 consecutive identical opposite readings</strong> (simple debounce).</li>
+<li>On <strong>every accepted transition (both rising and falling edges)</strong> the firmware
+  transmits the configured frame — ID <code>DIGTOGID</code>, payload <code>DIGTOGPAYLOAD</code>,
+  length <code>DIGTOGLEN</code> — on each bus flagged with <code>DIGTOGCAN0</code> / <code>DIGTOGCAN1</code>.</li>
+<li>The same payload is sent regardless of edge direction; the receiver cannot
+  tell rising from falling.</li>
+<li>If <code>DIGTOGID</code> &gt; 0x7FF the frame is sent as 29-bit extended, otherwise 11-bit.</li>
+</ul>
+<p>Use case: wire a switch/sensor/ECU pin to an Arduino pin and record its state
+changes as CAN frames on the bus, synchronized with logged traffic.</p>
+<h4 id="digital-inputs-03-arduino-pins-48-49-50-51">Digital inputs 0–3 (Arduino pins 48, 49, 50, 51)</h4>
+<p>Four digital inputs mapped in <code>sys_early_setup()</code> (<code>sys_io.cpp:64-67</code>). They
+are <strong>active-low</strong>: <code>getDigital()</code> returns <code>true</code> when the pin reads LOW
+(<code>sys_io.cpp:161</code>). They are read on demand by binary protocol command
+<code>0x02</code> (§7) which returns them packed as bits 0–3 of one byte.</p>
+<blockquote>
+<p><strong>Hardware conflict warning:</strong> on CANDue boards, pins 48 and 50 are also the
+CAN1/CAN0 transceiver-enable outputs (§4.2). Reading "digital inputs" 0 and 2
+on those boards actually reports the transceiver enable lines. The four
+digital inputs are only meaningfully usable on GEVCU hardware (or boards
+wired accordingly).</p>
+</blockquote>
+<h4 id="analog-inputs-a0a3">Analog inputs A0–A3</h4>
+<p>Four ADC channels are continuously sampled by a DMA-driven ADC
+(<code>setupFastADC()</code>, <code>sys_io.cpp</code>) with heavy averaging (~3 ms window).</p>
+<p>They are returned by binary protocol command <code>0x03</code> as four 16-bit values.</p>
+<blockquote>
+<p><strong>This build's analog inputs are non-functional:</strong> the call to
+<code>sys_io_adc_poll()</code> is commented out in <code>loop()</code> (<code>GVRET-gvret.ino:1157</code>),
+so the processed values never update and command <code>0x03</code> always returns
+zeroes. See §10.</p>
+</blockquote>
+<h4 id="commented-out-feature-mark-trigger-on-digital-input-0">Commented-out feature: mark trigger on digital input 0</h4>
+<p><code>loop()</code> contains a disabled block (<code>GVRET-gvret.ino:611-622</code>) that would have
+inserted a "MARK TRIGGERED" event when digital input 0 changed. It is not
+functional in this build.</p>
+<h3 id="42-outputs-signals-the-firmware-creates-on-pins">4.2 Outputs — signals the firmware creates on pins</h3>
+<h4 id="eight-general-purpose-outputs-arduino-pins-4-5-6-7-2-3-8-9">Eight general-purpose outputs (Arduino pins 4, 5, 6, 7, 2, 3, 8, 9)</h4>
+<p>Mapped in <code>sys_early_setup()</code> (<code>sys_io.cpp:76-83</code>) as outputs 0–7, initialized
+LOW at boot. Two ways to drive them:</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>How</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Binary protocol <code>SET_DIG_OUT</code> (cmd 0x04)</td>
+<td>one bitmask byte</td>
+<td>bit <em>c</em> = output <em>c</em>: 1 = HIGH, 0 = LOW. Sets all 8 at once</td>
+</tr>
+<tr>
+<td>Text console short commands</td>
+<td><code>K</code> / <code>J</code></td>
+<td><code>K</code> = all 8 HIGH, <code>J</code> = all 8 LOW</td>
+</tr>
+</tbody>
+</table>
+<p>Typical use: driving external relays/LEDs or biasing circuits under test while
+recording bus reactions.</p>
+<h4 id="digital-toggle-system-can-to-pin-direction-mode-1">Digital toggle system — CAN-to-pin direction (mode 1)</h4>
+<p>When <code>DIGTOGEN=1</code> and <code>DIGTOGMODE=1</code>, <code>DIGTOGPIN</code> becomes an <strong>output</strong>
+(<code>GVRET-gvret.ino:309-325</code>):</p>
+<ul>
+<li>Startup level: if <code>DIGTOGLEVEL=1</code> (mode bit 7 set) the pin is driven <strong>LOW</strong>
+  at boot; if <code>DIGTOGLEVEL=0</code> it is driven <strong>HIGH</strong>. (Note: this is the
+  <em>opposite</em> of what the comment in <code>config.h</code> says — see §10.)</li>
+<li>While the loop runs, every received frame on the participating buses is
+  compared against the configured filter:</li>
+<li>participates in CAN0 only if <code>DIGTOGCAN0=1</code>, in CAN1 only if
+    <code>DIGTOGCAN1=1</code>;</li>
+<li>the CAN ID must equal <code>DIGTOGID</code>;</li>
+<li>if <code>DIGTOGLEN</code> &gt; 0, the first <code>DIGTOGLEN</code> data bytes must equal
+    <code>DIGTOGPAYLOAD</code>; if <code>DIGTOGLEN=0</code>, any payload matches.</li>
+<li>On a match the pin <strong>toggles</strong> (HIGH→LOW→HIGH…) — <code>processDigToggleFrame()</code>,
+  <code>GVRET-gvret.ino:542-563</code>.</li>
+</ul>
+<p>Use case: detect on a physical pin (scope/logic analyzer/LED) that a specific
+CAN message with specific content occurred — e.g. trigger a capture or drive
+an actuator when a particular gear/state message appears.</p>
+<h4 id="single-wire-can-mode-pins-46-and-44-candue-boards">Single-wire CAN mode pins 46 and 44 (CANDue boards)</h4>
+<p><code>SWCANMode0Pin</code> / <code>SWCANMode1Pin</code> control the single-wire transceiver
+(<code>setSWCANSleep()</code> / <code>setSWCANEnabled()</code> / <code>setSWCANWakeup()</code>,
+<code>GVRET-gvret.ino:245-265</code>). You normally do not drive these yourself; the
+firmware sets them according to <code>SINGLEWIRE</code> state:</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Pin 46 (mode0)</th>
+<th>Pin 44 (mode1)</th>
+<th>CAN1 enable pin (48)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SWCAN sleeping (normal high-speed CAN1)</td>
+<td>LOW</td>
+<td>LOW</td>
+<td>HIGH</td>
+</tr>
+<tr>
+<td>SWCAN enabled</td>
+<td>HIGH</td>
+<td>HIGH</td>
+<td>LOW</td>
+</tr>
+<tr>
+<td>SWCAN wakeup pulse</td>
+<td>LOW</td>
+<td>HIGH</td>
+<td>unchanged</td>
+</tr>
+</tbody>
+</table>
+<p>On CANDue 2.2 (dedicated SWCAN) the CAN1 enable pin is left alone; the
+MCP2515 channel is used instead.</p>
+<h4 id="special-case-swcan-wakeup-frame-id-0x100">Special case: SWCAN wakeup frame (ID 0x100)</h4>
+<p>If single-wire mode is enabled and you transmit a frame with <strong>ID 0x100</strong> on
+the SWCAN bus (bus 1 on shared-transceiver boards, bus 2 on dedicated), the
+firmware emits a wakeup sequence around the frame:
+<code>setSWCANWakeup()</code> → 1 ms delay → transmit → 1 ms delay → <code>setSWCANEnabled()</code>
+(<code>GVRET-gvret.ino:879-899</code>). This mirrors the wake-up pattern required by many
+GM/Daimler single-wire nodes.</p>
+<h4 id="can-transceiver-enable-pins-50-48">CAN transceiver enable pins 50 / 48</h4>
+<p>Passed to <code>Can0.begin(speed, pin)</code> / <code>Can1.begin(speed, pin)</code>; the due_can
+library drives them to enable the physical transceivers. Do not use these pins
+for anything else (see digital-input conflict warning above).</p>
+<h4 id="status-leds">Status LEDs</h4>
+<table>
+<thead>
+<tr>
+<th>LED</th>
+<th>Driven when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LED_CANRX</td>
+<td>toggles on <strong>every received CAN frame</strong> (<code>toggleRXLED()</code>)</td>
+</tr>
+<tr>
+<td>LED_CANTX</td>
+<td>toggles whenever a frame is sent via <code>CAN0SEND</code>/Lawicel/console transmit</td>
+</tr>
+<tr>
+<td>LED_LOGGING</td>
+<td>toggles on <strong>every SD card flush</strong> (≈ once per second while logging)</td>
+</tr>
+<tr>
+<td>Blink LED (73)</td>
+<td>set HIGH when <code>setup()</code> completes successfully</td>
+</tr>
+</tbody>
+</table>
+<p>Per-board pin numbers: see table in §2. On original CANDue, pins 72/73 LEDs
+are active-low; pin 13 LED is active-high.</p>
+<h4 id="pins-driven-internally-not-user-functions">Pins driven internally (not user functions)</h4>
+<p>EEPROM write-protect (18/19), SD card SPI chip-select (10), MCP2515 CS/RESET/
+INT (34/32/38) — listed for completeness so they aren't repurposed by accident.</p>
+<hr />
+<h2 id="5-text-console-reference">5. Text Console Reference</h2>
+<p>Line-oriented, max 80 characters, terminated by LF, CR or CRLF. Dispatch rule
+(<code>SerialConsole.cpp:146-160</code>):</p>
+<ul>
+<li>single character → <strong>short command</strong></li>
+<li>contains <code>=</code> → <strong>config command</strong> (<code>NAME=value</code>)</li>
+<li>anything else → <strong>Lawicel command</strong> (§6)</li>
+</ul>
+<h3 id="short-commands">Short commands</h3>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>h</code>, <code>H</code>, <code>?</code></td>
+<td>Print help menu + build number</td>
+</tr>
+<tr>
+<td><code>K</code></td>
+<td>Set all 8 outputs HIGH</td>
+</tr>
+<tr>
+<td><code>J</code></td>
+<td>Set all 8 outputs LOW</td>
+</tr>
+<tr>
+<td><code>R</code></td>
+<td>Invalidate EEPROM (factory defaults after power cycle)</td>
+</tr>
+<tr>
+<td><code>s</code></td>
+<td>Start logging to SD file</td>
+</tr>
+<tr>
+<td><code>S</code></td>
+<td>Stop logging to SD file</td>
+</tr>
+<tr>
+<td><code>O</code></td>
+<td>Lawicel: open CAN0, enter Lawicel mode</td>
+</tr>
+<tr>
+<td><code>C</code></td>
+<td>Lawicel: close CAN0</td>
+</tr>
+<tr>
+<td><code>L</code></td>
+<td>Lawicel: open CAN0 (listen-only <strong>not</strong> actually implemented)</td>
+</tr>
+<tr>
+<td><code>P</code></td>
+<td>Lawicel: poll one frame (CR if none)</td>
+</tr>
+<tr>
+<td><code>A</code></td>
+<td>Lawicel: poll all frames (CR if none)</td>
+</tr>
+<tr>
+<td><code>F</code></td>
+<td>Lawicel: status → <code>F00</code></td>
+</tr>
+<tr>
+<td><code>V</code></td>
+<td>Lawicel: version → <code>V1013</code>, enters Lawicel mode</td>
+</tr>
+<tr>
+<td><code>N</code></td>
+<td>Lawicel: serial number → <code>ND00D</code>, enters Lawicel mode</td>
+</tr>
+</tbody>
+</table>
+<h3 id="config-commands-namevalue">Config commands (<code>NAME=value</code>)</h3>
+<p>Values are parsed with <code>strtol(..., 0)</code> — decimal or <code>0x</code>-prefixed hex.
+Unless noted, the new value is saved to EEPROM immediately.</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Range</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LOGLEVEL</code></td>
+<td>0–4</td>
+<td>0=debug, 1=info, 2=warn, 3=error, 4=off (console diagnostics)</td>
+</tr>
+<tr>
+<td><code>SYSTYPE</code></td>
+<td>0–3</td>
+<td>Board type; <strong>power cycle to apply</strong></td>
+</tr>
+<tr>
+<td><code>CAN0EN</code> / <code>CAN1EN</code></td>
+<td>0/1</td>
+<td>Enable/disable the channel (re-begins or disables controller)</td>
+</tr>
+<tr>
+<td><code>CAN0SPEED</code> / <code>CAN1SPEED</code></td>
+<td>1–1000000</td>
+<td>Bit rate in baud; applies immediately</td>
+</tr>
+<tr>
+<td><code>SWSPEED</code></td>
+<td>1–1000000</td>
+<td>SWCAN bit rate (stored; used at MCP2515 init)</td>
+</tr>
+<tr>
+<td><code>CAN0LISTENONLY</code> / <code>CAN1LISTENONLY</code></td>
+<td>0/1</td>
+<td>Listen-only (no ACK/dominate) mode</td>
+</tr>
+<tr>
+<td><code>CAN0FILTER0..7</code></td>
+<td>id,mask,ext,en</td>
+<td>Hardware acceptance filter, e.g. <code>CAN0FILTER0=0x7FF,0x7FF,0,1</code>. mask 0 = accept all</td>
+</tr>
+<tr>
+<td><code>CAN1FILTER0..7</code></td>
+<td>id,mask,ext,en</td>
+<td>Same for CAN1</td>
+</tr>
+<tr>
+<td><code>CAN0SEND</code></td>
+<td>id,len,d0,d1,…</td>
+<td>Transmit on CAN0, e.g. <code>CAN0SEND=0x200,4,1,2,3,4</code>. ID &gt; 0x7FF ⇒ extended frame</td>
+</tr>
+<tr>
+<td><code>CAN1SEND</code></td>
+<td>id,len,d0,…</td>
+<td>Transmit on CAN1</td>
+</tr>
+<tr>
+<td><code>SWSEND</code></td>
+<td>id,len,d0,…</td>
+<td>Transmit on SWCAN (MCP2515)</td>
+</tr>
+<tr>
+<td><code>MARK=text</code></td>
+<td>free text</td>
+<td>Insert annotation into log (GVRET format: <code>Mark:</code> line; CRTD: <code>CEV</code> event); echoed to console</td>
+</tr>
+<tr>
+<td><code>SINGLEWIRE</code></td>
+<td>0/1</td>
+<td>Single-wire mode flag (pin states change on next bus (re)start)</td>
+</tr>
+<tr>
+<td><code>BINSERIAL</code></td>
+<td>0/1</td>
+<td>Persist binary-serial preference (normally managed automatically)</td>
+</tr>
+<tr>
+<td><code>FILETYPE</code></td>
+<td>0–3</td>
+<td>Log format: 0=none, 1=binary, 2=GVRET CSV, 3=CRTD</td>
+</tr>
+<tr>
+<td><code>FILEBASE</code></td>
+<td>string</td>
+<td>Base file name (default <code>CANBUS</code>)</td>
+</tr>
+<tr>
+<td><code>FILEEXT</code></td>
+<td>string</td>
+<td>File extension (default <code>TXT</code>)</td>
+</tr>
+<tr>
+<td><code>FILENUM</code></td>
+<td>0–65535</td>
+<td>Incrementing number used when not appending</td>
+</tr>
+<tr>
+<td><code>FILEAPPEND</code></td>
+<td>0/1</td>
+<td>0 = new numbered file each start, 1 = append to <code>BASE.EXT</code></td>
+</tr>
+<tr>
+<td><code>FILEAUTO</code></td>
+<td>0/1</td>
+<td>Start logging automatically at power-up</td>
+</tr>
+<tr>
+<td><code>DIGTOGEN</code></td>
+<td>0/1</td>
+<td>Enable digital toggle system</td>
+</tr>
+<tr>
+<td><code>DIGTOGMODE</code></td>
+<td>0/1</td>
+<td>0 = watch pin, send CAN; 1 = watch CAN, toggle pin</td>
+</tr>
+<tr>
+<td><code>DIGTOGLEVEL</code></td>
+<td>0/1</td>
+<td>Default/startup level (see polarity caveat §10)</td>
+</tr>
+<tr>
+<td><code>DIGTOGPIN</code></td>
+<td>0–77</td>
+<td>Arduino pin used by the toggle system</td>
+</tr>
+<tr>
+<td><code>DIGTOGID</code></td>
+<td>&lt; 0x40000000</td>
+<td>CAN ID for the toggle system</td>
+</tr>
+<tr>
+<td><code>DIGTOGCAN0</code> / <code>DIGTOGCAN1</code></td>
+<td>0/1</td>
+<td>Which buses the toggle system listens/talks on</td>
+</tr>
+<tr>
+<td><code>DIGTOGLEN</code></td>
+<td>0–8</td>
+<td>Payload length to send (TX) or validate (RX)</td>
+</tr>
+<tr>
+<td><code>DIGTOGPAYLOAD</code></td>
+<td>b0,b1,…,b7</td>
+<td>Payload bytes, comma separated</td>
+</tr>
+</tbody>
+</table>
+<p>Factory defaults (written when EEPROM version mismatches):
+CAN0/CAN1 @ 500000 enabled, SWCAN 33333 disabled, filters accept-all,
+<code>FILETYPE=3</code> (CRTD), text serial, no auto-log, <code>LOGLEVEL=1</code>.</p>
+<hr />
+<h2 id="6-lawicel-slcan-mode">6. Lawicel / SLCAN Mode</h2>
+<p>A subset of the Lawicel CANUSB command set is understood directly on the same
+serial line (no mode switch needed for TX commands). Entering Lawicel mode
+(via <code>O</code>, <code>L</code>, <code>V</code> or <code>N</code>) makes received frames print as <code>t</code>/<code>T</code> lines
+terminated by CR.</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Support</th>
+<th>Behavior here</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>t&lt;III&gt;&lt;L&gt;&lt;DD…&gt;</code></td>
+<td>yes</td>
+<td>Transmit standard frame on <strong>CAN0</strong></td>
+</tr>
+<tr>
+<td><code>T&lt;IIIIIIII&gt;&lt;L&gt;&lt;DD…&gt;</code></td>
+<td>yes</td>
+<td>Transmit extended frame on CAN0 (note: <code>extended</code> flag bug — see §10)</td>
+</tr>
+<tr>
+<td><code>S&lt;n&gt;</code></td>
+<td>yes</td>
+<td>Preset CAN0 speed: 0=10k, 1=20k, 2=50k, 3=100k, 4=125k, 5=250k, 6=500k, 7=800k, 8=1M</td>
+</tr>
+<tr>
+<td><code>X1</code> / <code>X0</code></td>
+<td>yes</td>
+<td>Auto-poll flag (stored but RX gating is disabled in this build — frames stream anyway)</td>
+</tr>
+<tr>
+<td><code>Z1</code> / <code>Z0</code></td>
+<td>yes</td>
+<td>Append 16-bit millisecond timestamp to RX lines</td>
+</tr>
+<tr>
+<td><code>O</code> / <code>L</code> / <code>C</code></td>
+<td>partial</td>
+<td>Open / "listen-only" / close CAN0</td>
+</tr>
+<tr>
+<td><code>P</code> / <code>A</code> / <code>F</code></td>
+<td>yes</td>
+<td>Poll / poll-all / status</td>
+</tr>
+<tr>
+<td><code>V</code> / <code>N</code></td>
+<td>yes</td>
+<td>Version <code>V1013</code>, serial <code>ND00D</code></td>
+</tr>
+<tr>
+<td><code>U&lt;n&gt;</code></td>
+<td>ignored</td>
+<td>USB CDC baud is fixed</td>
+</tr>
+<tr>
+<td><code>r</code>, <code>R</code>, <code>W</code>, <code>m</code>, <code>M</code>, <code>Q</code></td>
+<td>stubs</td>
+<td>Accepted, no action</td>
+</tr>
+</tbody>
+</table>
+<p>Received-frame format (CR terminated):</p>
+<pre><code>t&lt;id 3 hex&gt;&lt;len&gt;&lt;data bytes 2 hex each&gt;[&lt;timestamp 4 hex&gt;]
+T&lt;id 8 hex&gt;&lt;len&gt;&lt;data bytes 2 hex each&gt;[&lt;timestamp 4 hex&gt;]
+</code></pre>
+<p>To leave Lawicel-style streaming, either send <code>0xE7</code> (switches to binary
+protocol) or power-cycle with <code>BINSERIAL=0</code>.</p>
+<hr />
+<h2 id="7-binary-gvret-protocol">7. Binary GVRET Protocol</h2>
+<p>This is the protocol SavvyCAN speaks. Entry: host sends byte <strong>0xE7</strong> — the
+device then enables binary comm, disables Lawicel mode and sets all CAN
+filters to promiscuous (accept everything).</p>
+<h3 id="framing">Framing</h3>
+<pre><code>0xF1 | CMD | payload… | CHECKSUM
+</code></pre>
+<ul>
+<li><code>0xF1</code> is the sync byte; bytes between a checksum and the next <code>0xF1</code> are
+  discarded.</li>
+<li>CHECKSUM = XOR of all preceding bytes of the message.</li>
+<li><strong>In this build the device never verifies the incoming checksum, and its own
+  CAN-frame messages carry a constant <code>0x00</code> checksum byte. Several reply
+  messages omit the checksum entirely</strong> (marked below). Parsers should rely on
+  the documented lengths.</li>
+</ul>
+<h3 id="host-device-commands">Host → device commands</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">Cmd</th>
+<th>Name</th>
+<th>Payload</th>
+<th>Reply</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">0x00</td>
+<td>BUILD_CAN_FRAME</td>
+<td>id (4 B LE, bit31 = extended), bus (1 B, 0/1/2), len (1 B, low nibble), data ×len, checksum</td>
+<td>frame transmitted on selected bus</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x01</td>
+<td>TIME_SYNC</td>
+<td>(any 1 byte)</td>
+<td><code>F1 01 &lt;micros 4 B LE&gt;</code> immediately; host then sends 1 filler byte</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x02</td>
+<td>DIG_INPUTS</td>
+<td>—</td>
+<td><code>F1 02 &lt;inputs bitfield&gt; &lt;cksum&gt;</code> (bits 0–3 = digital inputs 0–3, 1 = pin LOW)</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x03</td>
+<td>ANA_INPUTS</td>
+<td>—</td>
+<td><code>F1 03 &lt;A0 u16LE&gt; &lt;A1&gt; &lt;A2&gt; &lt;A3&gt; &lt;cksum&gt;</code> (<strong>always zero in this build</strong>)</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x04</td>
+<td>SET_DIG_OUT</td>
+<td>bitmask (1 B)</td>
+<td>outputs 0–7 set per bits (pins 4,5,6,7,2,3,8,9)</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x05</td>
+<td>SETUP_CANBUS</td>
+<td>CAN0 speed (4 B LE), CAN1 speed (4 B LE)</td>
+<td>applies + saves EEPROM; see flag bits below</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x06</td>
+<td>GET_CANBUS_PARAMS</td>
+<td>—</td>
+<td><code>F1 06 &lt;st0&gt; &lt;spd0 4B&gt; &lt;st1&gt; &lt;spd1 4B&gt;</code> (12 B, <strong>no checksum</strong>); st = enabled | listenOnly&lt;&lt;4 | singleWire&lt;&lt;6 (bus 1)</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x07</td>
+<td>GET_DEV_INFO</td>
+<td>—</td>
+<td><code>F1 07 &lt;build 2B LE&gt; &lt;eepromver&gt; &lt;filetype&gt; &lt;autostart&gt; &lt;singlewire&gt;</code> (8 B, <strong>no checksum</strong>)</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x08</td>
+<td>SET_SW_MODE</td>
+<td>1 B: <code>0x10</code> = enable SWCAN, anything else = disable</td>
+<td>saved to EEPROM</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x09</td>
+<td>KEEPALIVE</td>
+<td>—</td>
+<td><code>F1 09 DE AD</code> (4 B, <strong>no checksum</strong>)</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x0A</td>
+<td>SET_SYSTYPE</td>
+<td>1 B type 0–3</td>
+<td>saved, settings reloaded</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x0B</td>
+<td>ECHO_CAN_FRAME</td>
+<td>same layout as 0x00</td>
+<td>frame echoed to host over USB instead of transmitted</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x0C</td>
+<td>GET_NUMBUSES</td>
+<td>—</td>
+<td><code>F1 0C 03</code> (always reports 3)</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x0D</td>
+<td>GET_EXT_BUSES</td>
+<td>—</td>
+<td><code>F1 0D &lt;sw st&gt; &lt;sw spd 4B&gt; &lt;bus4 st+spd 5B=0&gt; &lt;bus5 st+spd 5B=0&gt;</code> (17 B, <strong>no checksum</strong>)</td>
+</tr>
+<tr>
+<td style="text-align: right;">0x0E</td>
+<td>SET_EXT_BUSES</td>
+<td>SW flags/speed (4 B), LIN1 (4 B, ignored), LIN2 (4 B, ignored)</td>
+<td>SW part applied + saved</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Speed word flag bits</strong> (commands 0x05 / 0x0E, value &gt; 0):</p>
+<table>
+<thead>
+<tr>
+<th>Bit</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>31</td>
+<td>flags are valid (else old behavior: just enable)</td>
+</tr>
+<tr>
+<td>30</td>
+<td>channel enabled (0 = disabled)</td>
+</tr>
+<tr>
+<td>29</td>
+<td>listen-only mode</td>
+</tr>
+<tr>
+<td>19–0</td>
+<td>bit rate, capped at 1 000 000 (SWCAN: 100 000)</td>
+</tr>
+</tbody>
+</table>
+<p>Speed value 0 disables the channel.</p>
+<p><strong>Bus numbering:</strong> 0 = CAN0, 1 = CAN1, 2 = dedicated SWCAN (MCP2515, CANDue
+2.2 only). On shared-transceiver boards, bus 1 with <code>SINGLEWIRE=1</code> <em>is</em> the
+SWCAN bus.</p>
+<h3 id="device-host-received-can-frames">Device → host: received CAN frames</h3>
+<p>Binary mode (<code>sendFrameToUSB()</code>, <code>GVRET-gvret.ino:456-475</code>):</p>
+<pre><code>F1 00 | timestamp µs (4 B LE) | id (4 B LE, bit31 = extended) |
+len | (bus &lt;&lt; 4) packed into len byte | data ×len | 0x00
+</code></pre>
+<p>Text mode equivalent (when <code>BINSERIAL=0</code>, not Lawicel):</p>
+<pre><code>&lt;micros&gt; - &lt;id HEX&gt; X|S &lt;bus&gt; &lt;len&gt; &lt;d0&gt; &lt;d1&gt; …
+</code></pre>
+<p>Timestamps are the Due <code>micros()</code> counter (32-bit, wraps ≈ 71.6 min).</p>
+<hr />
+<h2 id="8-sd-card-logging">8. SD Card Logging</h2>
+<p>Requires a card present at boot (<code>sd.begin()</code> on chip-select 10). Toggle with
+<code>s</code> / <code>S</code>, or <code>FILEAUTO=1</code> for automatic start.</p>
+<h3 id="formats-filetype">Formats (<code>FILETYPE</code>)</h3>
+<p><strong>1 — BINARYFILE</strong> (record, little-endian):</p>
+<pre><code>timestamp µs (4 B) | id (4 B, bit31 = extended) | len | (bus &lt;&lt; 4) | data ×len
+</code></pre>
+<p><strong>2 — GVRET CSV</strong> (what SavvyCAN imports as "GVRET" log):</p>
+<pre><code>&lt;millis&gt;,&lt;id hex&gt;,&lt;extended 0/1&gt;,&lt;bus&gt;,&lt;len&gt;,&lt;d0 hex&gt;,&lt;d1 hex&gt;,…
+</code></pre>
+<p>CRLF-terminated, no header row, millisecond resolution.</p>
+<p><strong>3 — CRTD</strong> (default):</p>
+<pre><code>&lt;seconds.fraction&gt; R11|R29 &lt;id hex&gt; &lt;d0 hex&gt; &lt;d1 hex&gt; …
+</code></pre>
+<p>Marks are written as <code>&lt;seconds&gt; CEV &lt;text&gt;</code>.</p>
+<h3 id="marks">Marks</h3>
+<p><code>MARK=&lt;text&gt;</code> inserts an annotation. In GVRET format it writes
+<code>Mark: &lt;text&gt;</code>; in CRTD a <code>CEV</code> event line. Use liberally during captures to
+correlate log positions with real-world actions.</p>
+<h3 id="file-naming">File naming</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;"><code>FILEAPPEND</code></th>
+<th>File opened</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">1</td>
+<td><code>BASE.EXT</code> — appended, never truncated</td>
+</tr>
+<tr>
+<td style="text-align: right;">0</td>
+<td><code>BASE&lt;FILENUM&gt;.EXT</code> — created/truncated, <code>FILENUM</code> incremented and saved</td>
+</tr>
+</tbody>
+</table>
+<p>Defaults: <code>CANBUS</code>, <code>TXT</code>, starting number 1.</p>
+<h3 id="write-buffering">Write buffering</h3>
+<p>An 8 KB buffer is flushed when nearly full (&gt; BUF_SIZE − 40 bytes pending) or
+at least once per second with pending data (<code>Logger::loop()</code>). The logging LED
+toggles on each flush. A failed write disables further file logging until
+reboot.</p>
+<hr />
+<h2 id="9-eeprom-settings-factory-reset">9. EEPROM Settings &amp; Factory Reset</h2>
+<ul>
+<li>EEPROM page 275: main settings (<code>EEPROMSettings</code>), validated by version
+  field (<code>EEPROM_VER = 0x17</code>). Mismatch ⇒ factory defaults written.</li>
+<li>EEPROM page 276: digital toggle settings. <code>mode == 255</code> ⇒ defaults
+  (disabled, pin 1, ID 0x700, length 0).</li>
+<li>Nearly every config command writes through immediately; <code>SYSTYPE</code> needs a
+  power cycle.</li>
+<li><strong>Factory reset:</strong> send <code>R</code>, then power-cycle. Restores: CAN0/CAN1 500k
+  enabled, SWCAN 33333 disabled, accept-all filters, CRTD file format, text
+  serial, auto-log off, log level info, sysType 0 (CANDue).</li>
+</ul>
+<hr />
+<h2 id="10-known-quirks-bugs-in-this-build">10. Known Quirks &amp; Bugs in This Build</h2>
+<p>Found by code inspection; worth knowing before relying on a feature.</p>
+<ol>
+<li><strong>Analog inputs always read 0.</strong> <code>sys_io_adc_poll()</code> is commented out in
+   <code>loop()</code> (<code>GVRET-gvret.ino:1157</code>). The DMA ADC still runs but results are
+   never processed. Re-add the call to revive analog inputs.</li>
+<li><strong>Checksums are decorative.</strong> Incoming checksums are never verified
+   (checks are commented out in <code>BUILD_CAN_FRAME</code>/<code>ECHO_CAN_FRAME</code>), and
+   outgoing CAN-frame messages always carry <code>0x00</code>. Several replies
+   (TIME_SYNC, GET_CANBUS_PARAMS, GET_DEV_INFO, KEEPALIVE, GET_NUMBUSES,
+   GET_EXT_BUSES) have no checksum byte at all.</li>
+<li><strong>Lawicel <code>T</code> (extended TX) sets <code>extended = false</code></strong>
+   (<code>SerialConsole.cpp:185</code>) — extended frames sent via Lawicel <code>T</code> go out
+   mislabeled. Use <code>CAN0SEND=</code> instead.</li>
+<li><strong>Lawicel <code>S</code> falls through to <code>s</code></strong> (<code>SerialConsole.cpp:194-227</code>) —
+   harmless today because <code>s</code> is empty, but the speed <em>is</em> applied.</li>
+<li><strong><code>L</code> is not listen-only.</strong> The Lawicel listen-only open just reopens CAN0
+   normally.</li>
+<li><strong>Lawicel auto-poll gating is disabled.</strong> The block that suppressed RX
+   output unless polled is commented out in <code>loop()</code>, so frames stream
+   continuously regardless of <code>X1</code>.</li>
+<li><strong><code>DIGTOGLEVEL</code> polarity is inverted relative to the comment in
+   <code>config.h</code>.</strong> With mode bit 7 set (=1) the toggle pin is driven <strong>LOW</strong> at
+   startup, and with 0 it is driven HIGH (<code>GVRET-gvret.ino:310-324</code>).</li>
+<li><strong>Digital inputs 0 and 2 collide with transceiver enables</strong> on CANDue
+   boards (pins 48/50 double as CAN1/CAN0 enable outputs). See §4.1.</li>
+<li><strong><code>GET_NUMBUSES</code> always answers 3</strong>, even on hardware without the
+   dedicated SWCAN channel.</li>
+<li><strong>Toggle TX sends the same payload for both pin edges</strong> — rising and
+    falling are indistinguishable on the bus.</li>
+<li><strong>No debounce on pass-through gate pins 11/12</strong> (fine for jumpers, avoid
+    using pushbuttons).</li>
+<li><strong>Mark trigger via digital input 0 is stubbed out</strong> (commented block in
+    <code>loop()</code>).</li>
+<li><code>handleCANSend</code> treats IDs ≥ 0x7FF as extended, so standard ID 0x7FF
+    itself remains standard while anything larger becomes a 29-bit frame.</li>
+<li>Debug <code>Serial</code> (programming port) is opened at 115200 but carries almost
+    nothing; all real interaction happens on <code>SerialUSB</code> (native port).</li>
+</ol>
+<hr />
+<h2 id="11-verifying-the-firmware-on-your-hardware">11. Verifying the Firmware on Your Hardware</h2>
+<p>This guide describes the source in this folder (build 343). Upstream
+<code>collin80/GVRET</code> master matches it byte-for-byte in protocol and pin logic,
+but a physical device may run an older release or a modified fork. Verify
+before trusting §4.1 behavior.</p>
+<h3 id="111-software-fingerprint-non-invasive">11.1 Software fingerprint (non-invasive)</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>What to check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Text console <code>h</code></td>
+<td><code>Build number:</code> line (343 here) and menu contents — presence of <code>DIGTOG*</code>, <code>SWSPEED</code>, <code>SWSEND</code>, <code>FILEAUTO</code> entries is a feature fingerprint</td>
+</tr>
+<tr>
+<td>SavvyCAN</td>
+<td>Auto-detects GVRET devices, shows build number in connection status</td>
+</tr>
+<tr>
+<td>Binary <code>GET_DEV_INFO</code> (<code>F1 07</code>)</td>
+<td>Bytes 2–3 = build number (little-endian), byte 4 = <code>EEPROM_VER</code> (<code>0x17</code> here)</td>
+</tr>
+</tbody>
+</table>
+<p>A matching build number identifies the version but not local modifications.
+If pin behavior contradicts this guide, assume a fork regardless of the
+reported build.</p>
+<h3 id="112-bench-test-of-the-pass-through-pins-definitive">11.2 Bench test of the pass-through pins (definitive)</h3>
+<p>Equipment: the GVRET board plus one dual-port USB-CAN adapter (or two single
+adapters). Each bus segment must contain at least one <strong>active</strong> node — a lone
+transmitter never receives an ACK and retries forever.</p>
+<ol>
+<li>CAN0 ↔ port A on bus 1; CAN1 ↔ port B on bus 2; common ground; ~120 Ω
+   termination per segment.</li>
+<li>Open a serial terminal on the native USB port, send <code>h</code> to confirm alive.</li>
+<li>Inject frame <code>0x123</code> on bus 1 → expect a copy on bus 2
+   (pin 11 floating = pulled HIGH = forwarding ON in this build).</li>
+<li>Jumper Arduino pin 11 to GND, inject again → forwarding must stop.</li>
+<li>Repeat in the other direction: inject on bus 2, watch bus 1, jumper pin 12.</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Observation</th>
+<th>Conclusion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Forwards by default, stops when pin grounded</td>
+<td>Matches this build</td>
+</tr>
+<tr>
+<td>Silent by default, forwards when pin grounded</td>
+<td>Inverted fork/older logic</td>
+</tr>
+</tbody>
+</table>
+<h3 id="113-single-bus-echo-test-no-second-adapter">11.3 Single-bus echo test (no second adapter)</h3>
+<p>Wire <strong>both</strong> CAN0 and CAN1 onto the same bus segment: every external frame is
+received by one channel and re-transmitted by the other, so duplicates flood
+the capture. Grounding pin 11 removes the 0→1 echoes, pin 12 the 1→0 echoes.
+This doubles bus load — fine on a bench node, use briefly on a vehicle.</p>
+<h3 id="114-guaranteed-parity">11.4 Guaranteed parity</h3>
+<p>Compile and flash this exact source tree (library list in §2). The device then
+matches this guide by construction.</p>
+<hr />
+<p><em>Guide generated from source analysis of this repository (build 343).</em></p></body></html>
