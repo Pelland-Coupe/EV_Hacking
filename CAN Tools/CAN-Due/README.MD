@@ -1,5 +1,5 @@
 
-I use the [GCRET] (https://github.com/collin80/GVRET) software on an Arduino Due extensively with SavvyCan. 
+I use the [GVRET] (https://github.com/collin80/GVRET) software on an Arduino Due extensively with SavvyCan. 
 
 I started with the [Open Inverter Wiki] (https://openinverter.org/wiki/CAN_bus_with_Arduino_Due) article on CAN bus with Arduino Due.
 
