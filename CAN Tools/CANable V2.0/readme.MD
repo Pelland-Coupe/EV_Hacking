@@ -1,4 +1,4 @@
-#Warning there are some faulty boards out there.
+# Warning there are some faulty boards out there.
 If it doesn't work for you and you're new to CAN it's likely to be the board not you.
 
 
