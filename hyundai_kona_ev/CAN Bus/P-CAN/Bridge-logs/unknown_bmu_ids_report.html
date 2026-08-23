@@ -1,0 +1,180 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Identification of unknown BMU/BMS IDs (0x3E2–0x3EC and related)</title><style>
+body{font-family:sans-serif;max-width:60em;margin:2em auto;padding:0 1em;line-height:1.5}
+table{border-collapse:collapse} th,td{border:1px solid #999;padding:4px 8px}
+th{background:#eee} code{background:#f4f4f4;padding:1px 4px;border-radius:3px}
+pre code{display:block;padding:8px} h1,h2{border-bottom:1px solid #ccc}
+</style></head><body><h1 id="identification-of-unknown-bmubms-ids-0x3e20x3ec-and-related">Identification of unknown BMU/BMS IDs (0x3E2–0x3EC and related)</h1>
+<p><strong>Date:</strong> 2026-08-23
+<strong>Sources:</strong> 10 bridge logs (<code>Bridge-logs/</code>) + <code>23-08-26 P-CAN-long_log.csv</code> (131.8 s, direct P-CAN)
+<strong>Correction to earlier note:</strong> no UDS diagnostics were running during these captures. The BMU
+(Battery Management Unit, aka BMS) transmits these IDs as part of its normal broadcast.</p>
+<hr />
+<h2 id="1-headline-finding">1. Headline finding</h2>
+<p>The "unknown" IDs are the <strong>BMS cell-voltage telemetry pages</strong>, plus housekeeping counters/flags.
+Together with the already-stubbed <code>UNK_3B9/3BA/3BB</code> and <code>UNK_3D0–3DE</code> messages they form one
+coherent 1 Hz family:</p>
+<table>
+<thead>
+<tr>
+<th>Group</th>
+<th>IDs</th>
+<th>Msgs × words</th>
+<th>Values seen</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Voltage block A</td>
+<td>0x3B9, 0x3BA, 0x3BB</td>
+<td>3 × 4 = 12</td>
+<td>3898–3904 mV</td>
+</tr>
+<tr>
+<td>Voltage block B</td>
+<td>0x3D0–0x3DE</td>
+<td>15 × 4 = 60</td>
+<td>3898–3906 mV</td>
+</tr>
+<tr>
+<td>Voltage block C</td>
+<td>0x3E2, 0x3E3, 0x3E5–0x3E8</td>
+<td>6 × 4 = 24</td>
+<td>3901–3905 mV</td>
+</tr>
+<tr>
+<td>Mixed block</td>
+<td>0x3E4 words 0–1</td>
+<td>2</td>
+<td>3902–3905 mV</td>
+</tr>
+<tr>
+<td><strong>Total cell values</strong></td>
+<td></td>
+<td></td>
+<td><strong>98 — matches the Kona EV 98S pack and the 0x3E9 counter wrap</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Every voltage word is <strong>little-endian, 16-bit, scale 1 mV</strong> (e.g. <code>3E 0F</code> → 0x0F3E = 3902 →
+3.902 V), consistent with a healthy parked NCM pack.</p>
+<h2 id="2-per-id-identification">2. Per-ID identification</h2>
+<table>
+<thead>
+<tr>
+<th>CAN-ID</th>
+<th>Proposed content</th>
+<th>Confidence</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0x3B9–0x3BB, 0x3D0–0x3DE</td>
+<td>Cell voltages, 4 × LE u16 mV per msg</td>
+<td>High</td>
+<td>mV-plausible static values; completes 98-cell arithmetic</td>
+</tr>
+<tr>
+<td>0x3E2, 0x3E3, 0x3E5–0x3E8</td>
+<td>Cell voltages, 4 × LE u16 mV per msg</td>
+<td>High</td>
+<td>same</td>
+</tr>
+<tr>
+<td>0x3E4 D0–D3</td>
+<td>Cell voltages (2 cells)</td>
+<td>High</td>
+<td>same</td>
+</tr>
+<tr>
+<td>0x3E4 D4–D7</td>
+<td><strong>Unknown gauges</strong> (see §4)</td>
+<td>Low</td>
+<td>slow byte-counters, tick +256 rarely</td>
+</tr>
+<tr>
+<td>0x3E9 D0</td>
+<td>Cycle/cell index counter, u8, wraps <strong>98→1</strong> at 1 Hz</td>
+<td>High</td>
+<td>exact 98-wrap observed in long log</td>
+</tr>
+<tr>
+<td>0x3EA D0</td>
+<td>BMS state flag: 1 = pre-ready monitoring, 2 = (ignition-on?)</td>
+<td>Medium</td>
+<td>flipped 1→2 once at +61 s in long log; stayed 1 in all short logs</td>
+</tr>
+<tr>
+<td>0x3EB D0</td>
+<td>Sequence/page counter mod 10 (1…10 repeating)</td>
+<td>High</td>
+<td>11 full cycles observed</td>
+</tr>
+<tr>
+<td>0x3EC</td>
+<td>Reserved / all-clear status (always 0x00)</td>
+<td>Medium</td>
+<td>constant across all 11 captures</td>
+</tr>
+</tbody>
+</table>
+<h2 id="3-lifecycle">3. Lifecycle</h2>
+<ul>
+<li>All 29 IDs broadcast at exactly <strong>1 Hz from bus wake</strong> (12 V on).</li>
+<li>Short bridge logs: family stops <strong>8–13 s after wake</strong>, coinciding with the S/S press that takes
+  the car toward READY (stop time varies per log exactly as the human press timing does; CCM log,
+  with slowest press, ran longest at 13 s). No other bus traffic changes at that moment.</li>
+<li>Long log (no start attempt for &gt;110 s): <strong>never stops</strong>.</li>
+<li>Conclusion: this page-set runs while the BMS is awake-but-pre-drive; it ceases on transition to
+  HV-run state. No payload change anywhere else on the bus marks the stop.</li>
+</ul>
+<h2 id="4-open-questions">4. Open questions</h2>
+<ol>
+<li><strong>0x3E4 D4–D7</strong>: two independent 2-byte fields. Observed values cluster ~3084–3087 and
+   ~3340–3343, with rare +256 jumps (high byte ticks: D5 ticked ~11:01, D7 between captures).
+   Candidates: cumulative energy/charge-throughput gauges, min/max-derived stats, or non-mV
+   temperatures with unusual scaling. A charge session will disambiguate immediately.</li>
+<li><strong>Cell ordering</strong>: which message/word maps to which physical cell index is unproven. The
+   0x3E9 counter may sequence through cells 1–98 but payloads do not visibly rotate with it.</li>
+<li><strong>0x3EA = 2 trigger</strong>: flip at +61 s in long log coincided only with routine changes elsewhere;
+   candidates include 0x597 bit7 clearing, 0x497 nibble change (both BMS-range IDs).</li>
+</ol>
+<h2 id="5-external-cross-reference">5. External cross-reference</h2>
+<ul>
+<li>projectgus/kona-ev-dbc <code>pcan.dbc</code>: <strong>no coverage</strong> for 0x3B9/0x3Dx/0x3Ex (its BMS coverage is
+  0x491…0x5D8 range). Our identification extends beyond public knowledge.</li>
+<li>uhi22 Ioniq28Motor.dbc: no cell-voltage definitions.</li>
+<li>opendbc hyundai_kia_generic: ADAS-focused, no coverage.</li>
+</ul>
+<h2 id="6-recommended-follow-up-captures">6. Recommended follow-up captures</h2>
+<ol>
+<li><strong>READY, ≥5 min, no gear change</strong>: confirm family stops at READY and stays stopped; watch
+   0x3EA value at the transition (expect 2? or freeze?).</li>
+<li><strong>Charge session (AC, ≥10 min)</strong>: cell voltages will climb smoothly — confirms mV scale
+   definitively and reveals whether 0x3E4 gauges track energy (kWh) or temperature.</li>
+<li><strong>Drive with hard acceleration</strong>: max/min cell words spread wider under load; identifies
+   weakest-cell behaviour if 0x3E4 holds extremes.</li>
+<li>Keep using the <strong>direct P-CAN tap</strong> (like the long log): the bridge setup adds no value here
+   since BMU attribution is already established.</li>
+</ol>
+<h2 id="7-deliverables">7. Deliverables</h2>
+<p><code>My_pcan_draft_addendum.dbc</code> next to this file contains draft <code>BO_/SG_</code> definitions for the 11
+missing IDs (0x3E2–0x3EC), ready to merge into <code>My_pcan.dbc</code> (IDs 994–1004 decimal, no clashes).
+Validated with cantools: loads cleanly and decodes live frames (e.g. <code>0x3E2</code> → 4 × 3.902 V).</p>
+<blockquote>
+<p>Note: <code>id_dbc_coverage.csv</code> was regenerated after fixing a little-endian byte-mapping bug in
+the coverage script (verified signal-by-signal against cantools across all 131 DBC messages).
+New totals: <strong>14 Full / 83 Partial / 11 Missing</strong> (previously reported 13/84/11); 42 rows
+changed their note-of-coverage details.</p>
+</blockquote>
+<h3 id="paste-in-signal-blocks-for-the-existing-unk-stubs">Paste-in signal blocks for the existing UNK stubs</h3>
+<p>Add these <code>SG_</code> lines under the matching <code>BO_</code> already present in <code>My_pcan.dbc</code>
+(<code>UNK_3B9</code>=2147484601, <code>UNK_3BA</code>=2147484602, <code>UNK_3BB</code>=2147484603,
+<code>UNK_3D0…UNK_3DE</code>=2147484624…2147484638):</p>
+<pre><code> SG_ CellVoltage_1 : 0|16@1+ (0.001,0) [0|65.534] &quot;V&quot; XXX
+ SG_ CellVoltage_2 : 16|16@1+ (0.001,0) [0|65.534] &quot;V&quot; XXX
+ SG_ CellVoltage_3 : 32|16@1+ (0.001,0) [0|65.534] &quot;V&quot; XXX
+ SG_ CellVoltage_4 : 48|16@1+ (0.001,0) [0|65.534] &quot;V&quot; XXX
+</code></pre>
+<p>(Identical block for each of the 18 stubbed messages; consider renaming the messages to
+<code>BMS_3B9_CellVoltages</code> etc. per repo convention at merge time.)</p></body></html>

@@ -1,0 +1,75 @@
+VERSION ""
+
+
+NS_ :
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+
+
+BS_:
+
+BU_: BMS
+
+BO_ 994 BMS_3E2_CellVoltages: 8 BMS
+ SG_ CellVoltage_1 : 0|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_2 : 16|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_3 : 32|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_4 : 48|16@1+ (0.001,0) [0|65.534] "V" XXX
+
+BO_ 995 BMS_3E3_CellVoltages: 8 BMS
+ SG_ CellVoltage_1 : 0|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_2 : 16|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_3 : 32|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_4 : 48|16@1+ (0.001,0) [0|65.534] "V" XXX
+
+BO_ 996 BMS_3E4_CellVoltages_Mixed: 8 BMS
+ SG_ CellVoltage_1 : 0|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_2 : 16|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ Gauge_A_Raw : 32|16@1+ (1,0) [0|65535] "" XXX
+ SG_ Gauge_B_Raw : 48|16@1+ (1,0) [0|65535] "" XXX
+
+BO_ 997 BMS_3E5_CellVoltages: 8 BMS
+ SG_ CellVoltage_1 : 0|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_2 : 16|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_3 : 32|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_4 : 48|16@1+ (0.001,0) [0|65.534] "V" XXX
+
+BO_ 998 BMS_3E6_CellVoltages: 8 BMS
+ SG_ CellVoltage_1 : 0|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_2 : 16|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_3 : 32|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_4 : 48|16@1+ (0.001,0) [0|65.534] "V" XXX
+
+BO_ 999 BMS_3E7_CellVoltages: 8 BMS
+ SG_ CellVoltage_1 : 0|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_2 : 16|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_3 : 32|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_4 : 48|16@1+ (0.001,0) [0|65.534] "V" XXX
+
+BO_ 1000 BMS_3E8_CellVoltages: 8 BMS
+ SG_ CellVoltage_1 : 0|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_2 : 16|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_3 : 32|16@1+ (0.001,0) [0|65.534] "V" XXX
+ SG_ CellVoltage_4 : 48|16@1+ (0.001,0) [0|65.534] "V" XXX
+
+BO_ 1001 BMS_3E9_CycleCounter: 8 BMS
+ SG_ CycleIndex : 0|8@1+ (1,0) [0|255] "" XXX
+
+BO_ 1002 BMS_3EA_StatusFlag: 8 BMS
+ SG_ StateFlag : 0|8@1+ (1,0) [0|255] "" XXX
+
+BO_ 1003 BMS_3EB_PageCounter: 8 BMS
+ SG_ PageIndex : 0|8@1+ (1,0) [0|10] "" XXX
+
+BO_ 1004 BMS_3EC_Reserved: 8 BMS
+ SG_ ReservedZero : 0|8@1+ (1,0) [0|255] "" XXX
+
+CM_ BO_ 996 "D4-D7 are two slow-moving gauges of unknown quantity; high bytes tick +256 rarely";
+CM_ BO_ 1001 "Counts 1..98 at 1 Hz then wraps; 98 matches series cell count";
+CM_ BO_ 1002 "Observed 1 pre-ready; flipped to 2 once during extended ACC capture";
+CM_ BO_ 1003 "Cycles 1..10 continuously at 1 Hz";
+CM_ BO_ 1004 "Always observed 0x00";
+
+VAL_ 1002 StateFlag 1 "PreReadyMonitoring" 2 "State2Unknown" ;

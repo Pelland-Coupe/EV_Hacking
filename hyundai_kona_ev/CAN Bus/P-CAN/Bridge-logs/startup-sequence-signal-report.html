@@ -1,0 +1,267 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>P-CAN Startup Sequence Signal Report</title><style>
+body{font-family:sans-serif;max-width:60em;margin:2em auto;padding:0 1em;line-height:1.5}
+table{border-collapse:collapse} th,td{border:1px solid #999;padding:4px 8px}
+th{background:#eee} code{background:#f4f4f4;padding:1px 4px;border-radius:3px}
+pre code{display:block;padding:8px} h1,h2{border-bottom:1px solid #ccc}
+</style></head><body><h1 id="p-can-startup-sequence-signal-report">P-CAN Startup Sequence Signal Report</h1>
+<p><strong>Log:</strong> <code>23-08-26 P-CAN-long_log.csv</code> (GVRET CSV, 309,450 frames, 122.6 s – 254.4 s)
+<strong>DBC:</strong> <code>../My_pcan.dbc</code>
+<strong>Capture sequence</strong> (per <code>Bridge-Logs.txt</code>): 12V battery on → press brake → press S/S → wait until running → press S/S → wait for shutdown → 12V off.</p>
+<p>All timestamps below are log-relative seconds (log starts at 122.600 s device time).</p>
+<h2 id="event-timeline">Event timeline</h2>
+<table>
+<thead>
+<tr>
+<th>Time (s)</th>
+<th>Event</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>122.60</td>
+<td>Log start, 12V already on</td>
+<td>BCM wake at 125.70</td>
+</tr>
+<tr>
+<td>~129.29</td>
+<td>Brake pressed (already down when IEB wakes)</td>
+<td>CYL_PRES ≈ 61.8 Bar held from first frame</td>
+</tr>
+<tr>
+<td>129.37</td>
+<td>S/S pressed (#1)</td>
+<td>BCM_593 byte0 1→20</td>
+</tr>
+<tr>
+<td>129.38</td>
+<td>Ignition "Starting"</td>
+<td>IgnitionSw 0→4</td>
+</tr>
+<tr>
+<td>129.47–129.49</td>
+<td>VCU + BMS begin transmitting</td>
+<td>first frames of 0x595 / 0x58F / 0x5A3 / 0x540</td>
+</tr>
+<tr>
+<td>129.59</td>
+<td>Request for HV turn on</td>
+<td>VCU_58F.Unk_Status 0→1</td>
+</tr>
+<tr>
+<td>129.66</td>
+<td>HV request corroborated</td>
+<td>VCU_200.UnkStatus 16→23</td>
+</tr>
+<tr>
+<td>129.86–130.16</td>
+<td>Precharge window</td>
+<td>PrechargeRelay pulse (~300 ms)</td>
+</tr>
+<tr>
+<td>130.16</td>
+<td>HV precharge completed</td>
+<td>ContactorClosed 0→1</td>
+</tr>
+<tr>
+<td>131.11</td>
+<td>RUN / Ready</td>
+<td>IgnitionSw 4→3</td>
+</tr>
+<tr>
+<td>130.97 / 131.41</td>
+<td>Brake released</td>
+<td>pressure-valid drops, DriverBraking→0</td>
+</tr>
+<tr>
+<td>242.74</td>
+<td>S/S pressed (#2, power off)</td>
+<td>BCM_593 byte0 20→0</td>
+</tr>
+<tr>
+<td>242.76–242.79</td>
+<td>Ignition off</td>
+<td>Ign1→0, IgnitionSw→0</td>
+</tr>
+<tr>
+<td>243.15</td>
+<td>Contactors open</td>
+<td>ContactorClosed 1→0</td>
+</tr>
+</tbody>
+</table>
+<h2 id="findings-per-event">Findings per event</h2>
+<h3 id="1-brake-press">1. Brake press</h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>ID</th>
+<th>Signal</th>
+<th>Definition</th>
+<th>Behaviour in log</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>StabilityControl</td>
+<td>0x220</td>
+<td><code>CYL_PRES_STAT</code></td>
+<td>bit 38|1@1+</td>
+<td>=1 while pedal pressed; →0 at release (130.971)</td>
+</tr>
+<tr>
+<td>StabilityControl</td>
+<td>0x220</td>
+<td><code>CYL_PRES</code></td>
+<td>bits 26|12@1+ (0.1 Bar)</td>
+<td>≈61.8 Bar held while pressed</td>
+</tr>
+<tr>
+<td>TractionControlMed</td>
+<td>0x390</td>
+<td><code>DriverBraking</code></td>
+<td>bit 55|1@1+</td>
+<td>=1 while braking; →0 at 131.412</td>
+</tr>
+<tr>
+<td>IEB_2A2</td>
+<td>0x2A2</td>
+<td><code>BrakePedalForce</code></td>
+<td>bits 24|16@1+</td>
+<td>≈4500 held; ramps down during release (131.09–131.30)</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Caveat:</strong> the rising edge of the brake press is not captured — IEB's first frame
+(129.291 s) already shows full pedal pressure. Only the <em>held</em> and <em>released</em>
+states are present in this capture.</p>
+</blockquote>
+<h3 id="2-ss-startstop-button-pressed">2. S/S (start/stop) button pressed</h3>
+<p>Best P-CAN indicator: <strong><code>BCM_593.Unknown1</code></strong> (ID 0x593, byte 0) — it changes <em>before</em>
+any other ignition-related signal and flips at both presses:</p>
+<table>
+<thead>
+<tr>
+<th>Time (s)</th>
+<th>Value change</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>125.696</td>
+<td>0→1</td>
+<td>BCM awake, ignition off</td>
+</tr>
+<tr>
+<td><strong>129.366</strong></td>
+<td><strong>1→20 (0x14)</strong></td>
+<td>S/S press #1 — leads IGPM reaction by 17 ms</td>
+</tr>
+<tr>
+<td><strong>242.741</strong></td>
+<td><strong>20→0</strong></td>
+<td>S/S press #2 — leads IGPM reaction by 20 ms</td>
+</tr>
+<tr>
+<td>244.741</td>
+<td>0→1</td>
+<td>back to idle state</td>
+</tr>
+</tbody>
+</table>
+<p>Resulting ignition state on <code>BodyState</code> (ID 0x541):
+- <code>IgnitionSw</code>: 0=Off → <strong>4=Starting</strong> (@129.383) → <strong>3=On/RUN</strong> (@131.111) → 0 (@242.789)
+- <code>Ign1</code> set @129.383, cleared @242.761; <code>Ign2</code> set @131.111, cleared @242.789</p>
+<h3 id="3-request-for-hv-turn-on">3. Request for HV turn on</h3>
+<p>Best candidate: <strong><code>VCU_58F.Unk_Status</code></strong> (ID 0x58F, Motorola bit 43, 4-bit):</p>
+<table>
+<thead>
+<tr>
+<th>Time (s)</th>
+<th>Value</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>129.592</td>
+<td>0→1</td>
+<td>209 ms after S/S press, <strong>269 ms before precharge relay closes</strong></td>
+</tr>
+<tr>
+<td>129.892</td>
+<td>→15</td>
+<td>precharge starting</td>
+</tr>
+<tr>
+<td>129.992</td>
+<td>→14</td>
+<td>transient during contactor close</td>
+</tr>
+<tr>
+<td>130.092</td>
+<td>→15</td>
+<td>steady while powered</td>
+</tr>
+<tr>
+<td>242.790</td>
+<td>→0</td>
+<td>exactly at shutdown</td>
+</tr>
+</tbody>
+</table>
+<p>Corroborating evidence:
+- VCU/BMS wake and start transmitting at 129.470–129.490 s.
+- <code>VCU_200.UnkStatus</code> (ID 0x200) sets its low bits 16→23 @129.656; reaches 59 (0x3B,
+  documented "Ready") @131.006.</p>
+<h3 id="4-hv-precharge-completed">4. HV precharge completed</h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>ID</th>
+<th>Signal</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Batt_HV_Status</td>
+<td>0x595</td>
+<td><code>PrechargeRelay</code></td>
+<td>high 129.861→130.161 (~300 ms precharge pulse), then opens</td>
+</tr>
+<tr>
+<td>BMS_5A3</td>
+<td>0x5A3</td>
+<td><code>ContactorClosed</code></td>
+<td><strong>0→1 @130.164</strong> — main contactors fully closed = precharge complete; holds until 243.153</td>
+</tr>
+<tr>
+<td>BatteryLimits</td>
+<td>0x594</td>
+<td><code>Sig594_BMS_Bit34</code>, <code>Sig594_BMS_Bit38</code> set / <code>Bit61</code> cleared</td>
+<td>status flags flip @130.158</td>
+</tr>
+<tr>
+<td>BMS_597</td>
+<td>0x597</td>
+<td><code>Active</code></td>
+<td>0→1 @130.163 (Ready or charging)</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Note: <code>UNK_520.StartIndicator</code> (whose DBC comment says it pulses at end of
+precharge) stayed 0 for this entire capture.</p>
+</blockquote>
+<h2 id="method">Method</h2>
+<p>Frames were decoded with <code>cantools</code> against <code>My_pcan.dbc</code> (with an in-memory fixup:
+signals named <code>594_BMS_Bit*</code> renamed to satisfy DBC identifier rules). Transitions of
+every signal were collected across the full log, then grouped into event windows around
+the known sequence; low-frequency signals (≤3 changes per window) were kept and
+counter/checksum-like signals filtered out. A raw byte-level diff between the OFF state
+(124–129.3 s) and the HV-request window (129.55–129.85 s) confirmed the VCU-side findings.</p></body></html>

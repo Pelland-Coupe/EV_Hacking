@@ -1,0 +1,6 @@
+Investigate if 0x490 is forwarded un changed from C-CAN to P-CAN, It originates from the IEB on C-CAN.
+
+Continue bridge work on P-CAN to cover devices not yet done.
+
+Investigate 0x5B3 as it bridge tests from IGPM on P-CAN but other sources say it's a BMS signal.
+

@@ -1,0 +1,15 @@
+23/8/26
+
+Using CanDue with GVRET to split the P-CAN bus.
+Channel 0 is the full P-CAN less device being bridged
+Channel 1 is the device being bridged.
+
+Sequence is
+
+turn on 12V battery
+Press brake
+Press S/S
+wait untill up and running
+Press S/S
+wait for turn off
+turn of 12V battery
